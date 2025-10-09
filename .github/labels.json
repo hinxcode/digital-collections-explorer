@@ -1,0 +1,122 @@
+[
+  {
+    "name": "bug",
+    "color": "d73a4a",
+    "description": "Something isn't working"
+  },
+  {
+    "name": "documentation",
+    "color": "0075ca",
+    "description": "Improvements or additions to documentation"
+  },
+  {
+    "name": "duplicate",
+    "color": "cfd3d7",
+    "description": "This issue or pull request already exists"
+  },
+  {
+    "name": "enhancement",
+    "color": "a2eeef",
+    "description": "New feature or request"
+  },
+  {
+    "name": "good first issue",
+    "color": "7057ff",
+    "description": "Good for newcomers"
+  },
+  {
+    "name": "help wanted",
+    "color": "008672",
+    "description": "Extra attention is needed"
+  },
+  {
+    "name": "invalid",
+    "color": "e4e669",
+    "description": "This doesn't seem right"
+  },
+  {
+    "name": "question",
+    "color": "d876e3",
+    "description": "Further information is requested"
+  },
+  {
+    "name": "wontfix",
+    "color": "ffffff",
+    "description": "This will not be worked on"
+  },
+  {
+    "name": "research",
+    "color": "fbca04",
+    "description": "Research contribution or academic collaboration"
+  },
+  {
+    "name": "dependencies",
+    "color": "0366d6",
+    "description": "Pull requests that update a dependency file"
+  },
+  {
+    "name": "security",
+    "color": "ee0701",
+    "description": "Security-related issues"
+  },
+  {
+    "name": "frontend",
+    "color": "1d76db",
+    "description": "Frontend-related changes"
+  },
+  {
+    "name": "backend",
+    "color": "5319e7",
+    "description": "Backend-related changes"
+  },
+  {
+    "name": "python",
+    "color": "2b67c6",
+    "description": "Python code changes"
+  },
+  {
+    "name": "javascript",
+    "color": "f1e05a",
+    "description": "JavaScript/Node.js changes"
+  },
+  {
+    "name": "ml-model",
+    "color": "ff6b6b",
+    "description": "Machine learning model related"
+  },
+  {
+    "name": "photographs",
+    "color": "c5def5",
+    "description": "Photographs collection specific"
+  },
+  {
+    "name": "maps",
+    "color": "bfd4f2",
+    "description": "Maps collection specific"
+  },
+  {
+    "name": "documents",
+    "color": "d4c5f9",
+    "description": "Documents collection specific"
+  },
+  {
+    "name": "breaking change",
+    "color": "d93f0b",
+    "description": "Breaking changes that require attention"
+  },
+  {
+    "name": "needs testing",
+    "color": "fef2c0",
+    "description": "Needs manual testing"
+  },
+  {
+    "name": "performance",
+    "color": "ff9800",
+    "description": "Performance improvements"
+  },
+  {
+    "name": "github-actions",
+    "color": "000000",
+    "description": "GitHub Actions workflow related"
+  }
+]
