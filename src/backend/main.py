@@ -1,14 +1,15 @@
+import logging
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import logging
-import uvicorn
-from pathlib import Path
-from contextlib import asynccontextmanager
 
+from .api.routes import embeddings, images, search
 from .core.config import settings
 from .services.embedding_service import embedding_service
-from .api.routes import search, images, embeddings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -16,22 +17,24 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
 @asynccontextmanager
 async def lifespan(app):
     logger.info("Initializing services...")
-    
+
     embedding_service.load_embeddings()
-    
+
     logger.info(f"Starting API server on {settings.host}:{settings.port}")
     logger.info(f"Debug mode: {settings.debug}")
-    
+
     yield
+
 
 app = FastAPI(
     title=settings.api_title,
     description=settings.api_description,
     version=settings.api_version,
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 cors_origins = [
@@ -53,10 +56,12 @@ app.include_router(search.router)
 app.include_router(images.router)
 app.include_router(embeddings.router)
 
+
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy"}
+
 
 frontend_dir = Path(f"src/frontend/{settings.collection_type}/dist")
 
@@ -72,5 +77,5 @@ if __name__ == "__main__":
         "src.backend.main:app",
         host=settings.host,
         port=settings.port,
-        reload=settings.debug
+        reload=settings.debug,
     )

@@ -65,7 +65,7 @@ pip install -r requirements.txt
 
 ### Step 4: Prepare Your Collection
 
-1. Add your images to the `data/raw` directory. Supported formats include JPG, JPEG, PNG, GIF, BMP, TIFF, and WebP. The images in subdirectories will also be retrieved recursively.
+1. Add your images to the directory configured as `raw_data_dir` (default: `data/raw`). Supported formats include JPG, JPEG, PNG, GIF, BMP, TIFF, and WebP. The images in subdirectories will also be retrieved recursively.
 
 2. Generate embeddings for your collection:
 
@@ -73,7 +73,7 @@ pip install -r requirements.txt
 python -m src.models.clip.generate_embeddings
 ```
 
-This will process all images in the `data/raw` directory and create embeddings in the `data/embeddings` directory.
+This will process all images found in `raw_data_dir` and create embeddings in `embeddings_dir` (both set in `config.json`).
 
 ### Step 5: Start the Backend Server
 
@@ -113,7 +113,32 @@ Then restart the backend server to serve the updated frontend.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! We appreciate bug fixes, new features, and documentation improvements.
+
+### Quick Start for Contributors
+
+1. Fork and clone the repository
+2. Create a feature branch: `git checkout -b feature/my-change`
+3. Set up the environment following the Quick Start guide above
+4. Make your changes and test locally
+5. Run linting:
+   - Python: `black . && isort .`
+   - Frontend: `npm run lint` (in the frontend directory)
+6. Commit with clear messages (Conventional Commits encouraged)
+7. Open a Pull Request
+
+For detailed guidelines, please read [CONTRIBUTING.md](CONTRIBUTING.md).
+
+### Ways to Contribute
+
+- 🐛 **Report bugs** using our [bug report template](.github/ISSUE_TEMPLATE/bug_report.md)
+- ✨ **Suggest features** using our [feature request template](.github/ISSUE_TEMPLATE/feature_request.md)
+- 📚 **Improve documentation** using our [documentation template](.github/ISSUE_TEMPLATE/documentation.md)
+- 💻 **Submit code** via Pull Requests following our [PR template](.github/PULL_REQUEST_TEMPLATE.md)
+
+### Code of Conduct
+
+This project adheres to a [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
 
 ## References
 

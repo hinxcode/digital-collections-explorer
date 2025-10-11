@@ -51,7 +51,7 @@ function App() {
     }));
   };
 
-  const handleSearchByText = async (query) => {
+  const handleSearchByText = useCallback(async (query) => {
     if (!query.trim()) {
       setError('Please enter a search term');
       return;
@@ -72,9 +72,9 @@ function App() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [resultsPerPage, currentPage]);
 
-  const handleSearchByImage = async (image) => {
+  const handleSearchByImage = useCallback(async (image) => {
     setIsLoading(true);
     setError(null);
     setSearchMode('image');
@@ -89,7 +89,7 @@ function App() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [resultsPerPage, currentPage]);
 
   useEffect(() => {
     if (searchMode === 'text' && searchQuery.trim()) {
@@ -97,7 +97,7 @@ function App() {
     } else if (searchMode === 'image' && uploadedImage) {
       handleSearchByImage(uploadedImage);
     }
-  }, [currentPage, resultsPerPage]);
+  }, [currentPage, resultsPerPage, searchMode, searchQuery, uploadedImage, handleSearchByText, handleSearchByImage]);
 
   const handleSearchModeChanged = useCallback((mode) => {
     setSearchMode(mode);

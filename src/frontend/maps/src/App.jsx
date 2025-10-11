@@ -42,7 +42,7 @@ function App() {
     }));
   };
 
-  const handleSearchByText = async (query) => {
+  const handleSearchByText = useCallback(async (query) => {
     if (!query.trim()) return;
     
     setIsLoading(true);
@@ -58,9 +58,9 @@ function App() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [resultsPerPage, currentPage]);
 
-  const handleSearchByImage = async (image) => {
+  const handleSearchByImage = useCallback(async (image) => {
     setIsLoading(true);
     setError(null);
     
@@ -74,7 +74,7 @@ function App() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [resultsPerPage, currentPage]);
 
   useEffect(() => {
     if (searchMode === 'text' && searchQuery) {
@@ -82,7 +82,7 @@ function App() {
     } else if (searchMode === 'image' && uploadedImage) {
       handleSearchByImage(uploadedImage);
     }
-  }, [currentPage]);
+  }, [currentPage, searchMode, searchQuery, uploadedImage, handleSearchByText, handleSearchByImage]);
 
   const handleLightboxOpened = useCallback(async (selectedMap) => {
     try {
