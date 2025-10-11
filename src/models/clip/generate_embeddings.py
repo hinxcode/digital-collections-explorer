@@ -10,9 +10,12 @@ from dataclasses import dataclass
 from typing import Dict, Any
 import PyPDF2
 import base64
+import argparse
+
 
 from transformers import CLIPProcessor, CLIPModel
 from src.backend.core.config import settings
+import src.models.clip.util as util
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -232,9 +235,90 @@ def process_files(model: Any,
     
     return ProcessingResult(embeddings, metadata, skipped_items_count, failed_items_count)
 
+def process_remote_files(model: Any, 
+                 processor: Any, 
+                 device: str,
+                 raw_data_dir: str,
+                 processed_dir: str,
+                 thumbnails_dir: str,
+                 bucket: str,
+                 prefix: str,
+                 timing_info: Dict[str, float]) -> ProcessingResult:
+    """Process all files in the raw data directory"""
+    logger.info(f"Looking for files in {bucket}/{prefix}")
+
+    client = util.create_client()
+
+    files = util.get_file_names(client, bucket, prefix)
+
+    supported_extensions = {
+        'pdf': ['pdf'],
+        'image': ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'webp']
+    }
+    
+    files_to_process = []
+    skipped_items_count = 0
+    failed_items_count = 0
+
+    for file_path in files:
+        ext = file_path.suffix.lower().lstrip('.')
+        is_image = ext in supported_extensions['image']
+        is_pdf = ext in supported_extensions['pdf']
+
+        if is_image or is_pdf and settings.collection_type != 'photographs':
+            files_to_process.append(file_path)
+        else:
+            skipped_items_count += 1
+    
+    logger.info(f"Found {len(files_to_process)} eligible files to process.")
+    
+    if not files_to_process:
+        logger.warning(f"No files found in {bucket}")
+        return ProcessingResult({}, {}, skipped_items_count, failed_items_count)
+    
+    embeddings = {}
+    metadata = {}
+    
+    for file_path in files:
+        try:
+            ext = file_path.suffix.lower().lstrip('.')
+            is_image = ext in supported_extensions['image']
+            is_pdf = ext in supported_extensions['pdf']
+            client.download_file(bucket, f"{prefix}/{file_path}", f"{raw_data_dir}/{file_path}")
+            if is_pdf:
+                results = process_pdf(file_path, raw_data_dir, model, processor, device, processed_dir, thumbnails_dir, timing_info)
+            elif is_image:
+                results = process_image(file_path, raw_data_dir, model, processor, device, processed_dir, thumbnails_dir, timing_info)
+            Path.unlink(raw_data_dir + file_path)
+            
+            if results:
+                for item_id, embedding, metadata_item in results:
+                    embeddings[item_id] = embedding
+                    metadata[item_id] = metadata_item
+            else:
+                failed_items_count += 1
+        except Exception as e:
+            logger.error(f"Error processing {file_path}: {e}")
+            failed_items_count += 1
+    
+    return ProcessingResult(embeddings, metadata, skipped_items_count, failed_items_count)
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--use_remote", action='store_true',
+                        help="Whether to use a remote set of inputs.")
+    parser.add_argument("--bucket", type=str, default="", help="The name of the bucket where the images are stored")
+    parser.add_argument("--prefix", type=str, default="", help="The prefix where the images are stored")
+
+    args = parser.parse_args()
+    return args.use_remote, args.bucket, args.prefix
+
 def main():
     start_time = time.time()
     
+    # Get command line arguments
+    USE_REMOTE, BUCKET, PREFIX = parse_args()
+
     RAW_DATA_DIR = Path(settings.raw_data_dir)
     EMBEDDINGS_DIR = Path(settings.embeddings_dir)
     PROCESSED_DIR = Path(settings.processed_data_dir)
@@ -257,8 +341,11 @@ def main():
     processor = CLIPProcessor.from_pretrained(MODEL_ID)
     
     embedding_timing_info = {'total_duration': 0.0}
-    
-    result = process_files(model, processor, DEVICE, RAW_DATA_DIR, PROCESSED_DIR, THUMBNAILS_DIR, embedding_timing_info)
+
+    if USE_REMOTE:
+        result = process_remote_files(model, processor, DEVICE, RAW_DATA_DIR, PROCESSED_DIR, THUMBNAILS_DIR, BUCKET, PREFIX, embedding_timing_info)
+    else:
+        result = process_files(model, processor, DEVICE, RAW_DATA_DIR, PROCESSED_DIR, THUMBNAILS_DIR, embedding_timing_info)
     
     embeddings_file = EMBEDDINGS_DIR / "embeddings.pt"
     item_ids_file = EMBEDDINGS_DIR / "item_ids.pt"
