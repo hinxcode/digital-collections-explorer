@@ -75,6 +75,12 @@ python -m src.models.clip.generate_embeddings
 
 This will process all images found in `raw_data_dir` and create embeddings in `embeddings_dir` (both set in `config.json`).
 
+If your data is stored in an S3 bucket instead of locally, ensure your default profile has read and list access to your bucket, then run the above command with the following arguments:
+
+```bash
+python -m src.models.clip.generate_embeddings --use-remote --bucket <BUCKETNAME> --prefix <PREFIX>
+```
+
 ### Step 5: Start the Backend Server
 
 ```bash
@@ -82,6 +88,8 @@ python -m src.backend.main
 ```
 
 The API server will start at http://localhost:8000
+
+If your data is stored in S3, change the REMOTE flag in src.backend.main to True.
 
 ### Customizing the Frontend
 

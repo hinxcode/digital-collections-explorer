@@ -70,6 +70,9 @@ def process_pdf(
     processed_dir,
     thumbnails_dir,
     timing_info: Dict[str, float],
+    use_remote=False,
+    bucket="",
+    file=""
 ):
     """Process a PDF file and generate embeddings for each page"""
     try:
@@ -112,10 +115,11 @@ def process_pdf(
                 thumbnail_path = pdf_thumbnails_dir / f"{i}.jpg"
                 thumbnail.save(thumbnail_path, "JPEG", quality=80)
 
-                processed_image = image.copy()
-                processed_image.thumbnail((1920, 1920), Image.Resampling.LANCZOS)
-                processed_image_path = pdf_processed_dir / f"{i}.jpg"
-                processed_image.save(processed_image_path, "JPEG", quality=90)
+                if not use_remote:
+                    processed_image = image.copy()
+                    processed_image.thumbnail((1920, 1920), Image.Resampling.LANCZOS)
+                    processed_image_path = pdf_processed_dir / f"{i}.jpg"
+                    processed_image.save(processed_image_path, "JPEG", quality=90)
 
                 page_embedding = generate_embeddings(
                     model, processor, [image], device, timing_info
@@ -151,9 +155,13 @@ def process_pdf(
                 "n_pages": n_pages,
                 "paths": {
                     "original": str(file_path),
-                    "processed": str(pdf_processed_dir / f"{i}.jpg"),
+                    "processed": str(pdf_processed_dir / f"{i}.jpg") 
+                                if not use_remote else f"{file}",
                     "thumbnail": str(pdf_thumbnails_dir / f"{i}.jpg"),
                 },
+                "remote": use_remote,
+                "bucket": bucket,
+                "processed_dir": str(processed_dir)
             }
             results.append((item_id, embedding, metadata))
 
@@ -172,6 +180,9 @@ def process_image(
     processed_dir,
     thumbnails_dir,
     timing_info: Dict[str, float],
+    use_remote=False,
+    bucket="",
+    file=""
 ):
     """Process an image file and generate its embedding"""
     try:
@@ -182,14 +193,15 @@ def process_image(
         thumbnail.thumbnail((400, 400), Image.Resampling.LANCZOS)
         thumbnail_path = thumbnails_dir / f"{file_path.stem}.jpg"
         thumbnail.save(thumbnail_path, "JPEG", quality=80)
+        
+        if not use_remote:
+            processed_image = image.copy()
+            processed_image.thumbnail((1920, 1920), Image.Resampling.LANCZOS)
 
-        processed_image = image.copy()
-        processed_image.thumbnail((1920, 1920), Image.Resampling.LANCZOS)
-
-        image_processed_dir = processed_dir / file_path.stem
-        image_processed_dir.mkdir(parents=True, exist_ok=True)
-        processed_image_path = image_processed_dir / "0.jpg"
-        processed_image.save(processed_image_path, "JPEG", quality=90)
+            image_processed_dir = processed_dir / file_path.stem
+            image_processed_dir.mkdir(parents=True, exist_ok=True)
+            processed_image_path = image_processed_dir / "0.jpg"
+            processed_image.save(processed_image_path, "JPEG", quality=90)
 
         embedding = generate_embeddings(model, processor, [image], device, timing_info)
         if embedding is None:
@@ -207,9 +219,13 @@ def process_image(
             "type": "image",
             "paths": {
                 "original": str(file_path),
-                "processed": str(processed_image_path),
+                "processed": str(processed_image_path)
+                            if not use_remote else f"{file}",
                 "thumbnail": str(thumbnail_path),
             },
+            "remote": use_remote,
+            "bucket": bucket,
+            "processed_dir": str(processed_dir)
         }
 
         return [(item_id, embedding[0], metadata)]
@@ -306,9 +322,9 @@ def process_files(
 def process_remote_files(model: Any, 
                  processor: Any, 
                  device: str,
-                 raw_data_dir: str,
-                 processed_dir: str,
-                 thumbnails_dir: str,
+                 raw_data_dir: Path,
+                 processed_dir: Path,
+                 thumbnails_dir: Path,
                  bucket: str,
                  prefix: str,
                  timing_info: Dict[str, float]) -> ProcessingResult:
@@ -317,7 +333,8 @@ def process_remote_files(model: Any,
 
     client = util.create_client()
 
-    files = util.get_file_names(client, bucket, prefix)
+    files = util.get_file_names(client, bucket, prefix)[1:]
+    file_paths = [Path(file) for file in files]
 
     supported_extensions = {
         'pdf': ['pdf'],
@@ -328,7 +345,7 @@ def process_remote_files(model: Any,
     skipped_items_count = 0
     failed_items_count = 0
 
-    for file_path in files:
+    for file_path in file_paths:
         ext = file_path.suffix.lower().lstrip('.')
         is_image = ext in supported_extensions['image']
         is_pdf = ext in supported_extensions['pdf']
@@ -347,17 +364,19 @@ def process_remote_files(model: Any,
     embeddings = {}
     metadata = {}
     
-    for file_path in files:
+    for i, file_path in enumerate(file_paths):
         try:
             ext = file_path.suffix.lower().lstrip('.')
             is_image = ext in supported_extensions['image']
             is_pdf = ext in supported_extensions['pdf']
-            client.download_file(bucket, f"{prefix}/{file_path}", f"{raw_data_dir}/{file_path}")
+            (raw_data_dir / prefix).mkdir(parents=True, exist_ok=True)
+            local_dir = f"{raw_data_dir}/{files[i]}"
+            util.download_file(client, bucket, files[i], local_dir)
             if is_pdf:
-                results = process_pdf(file_path, raw_data_dir, model, processor, device, processed_dir, thumbnails_dir, timing_info)
+                results = process_pdf(local_dir, raw_data_dir, model, processor, device, processed_dir, thumbnails_dir, timing_info, True, bucket, files[i])
             elif is_image:
-                results = process_image(file_path, raw_data_dir, model, processor, device, processed_dir, thumbnails_dir, timing_info)
-            Path.unlink(raw_data_dir + file_path)
+                results = process_image(local_dir, raw_data_dir, model, processor, device, processed_dir, thumbnails_dir, timing_info, True, bucket, files[i])
+            Path.unlink(raw_data_dir / file_path)
             
             if results:
                 for item_id, embedding, metadata_item in results:
