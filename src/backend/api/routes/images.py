@@ -41,9 +41,11 @@ async def get_image_by_id(
     ):
         path_str = doc["metadata"]["paths"]["processed"]
         if doc["metadata"]["remote"]:
-            s3_client = boto3.session.Session().client('s3')
+            s3_client = boto3.session.Session().client("s3")
             local_dir = f"{doc['metadata']['processed_dir']}/{path_str}"
-            helpers.download_file(s3_client, doc["metadata"]["bucket"], path_str, local_dir)
+            helpers.download_file(
+                s3_client, doc["metadata"]["bucket"], path_str, local_dir
+            )
             path_str = local_dir
     else:
         raise HTTPException(

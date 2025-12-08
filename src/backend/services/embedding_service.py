@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import torch
+import numpy as np
 
 from ..core.config import settings
 
@@ -99,16 +100,45 @@ class EmbeddingService:
 
         return None
 
+    def filepath_filter(self, filepath_substring: str) -> torch.Tensor:
+        """Create a metadata filter for file path substring matching"""
+        metadata_arr = np.array(
+            [
+                self.metadata[item_id].get("paths", {}).get("original", "")
+                for item_id in self.item_ids
+            ]
+        )
+        matching_indices = np.where(
+            np.char.find(metadata_arr.astype(str), filepath_substring) != -1
+        )[0]
+        return torch.tensor(matching_indices, dtype=torch.long)
+
     def search(
         self,
         query_embedding: torch.Tensor,
         logit_scale: Optional[float] = None,
         limit: int = 20,
         offset: int = 0,
+        filepath_search_term: str = "",
     ) -> List[Dict[str, Any]]:
         """Search for similar items using query embedding with pagination"""
         try:
-            similarities = torch.matmul(self.embeddings, query_embedding.t()).squeeze()
+            if filepath_search_term != "":
+                valid_indices = self.filepath_filter(filepath_search_term)
+
+                if len(valid_indices) == 0:
+                    return []  # No items match the filter
+
+                # Filter embeddings to only valid ones
+                filtered_embeddings = self.embeddings[valid_indices]
+                similarities = torch.matmul(
+                    filtered_embeddings, query_embedding.t()
+                ).squeeze()
+            else:
+                valid_indices = None
+                similarities = torch.matmul(
+                    self.embeddings, query_embedding.t()
+                ).squeeze()
 
             if logit_scale is not None:
                 similarities = similarities * logit_scale
@@ -127,7 +157,14 @@ class EmbeddingService:
             for idx, score in zip(
                 paginated_indices.tolist(), paginated_scores.tolist()
             ):
-                idx_int = int(idx)
+                # Map back to original index if we filtered
+                if valid_indices is not None:
+                    original_idx = valid_indices[idx].item()
+                else:
+                    original_idx = idx
+
+                idx_int = int(original_idx)
+
                 if idx_int >= len(self.item_ids):
                     logger.warning(
                         f"Index {idx_int} out of range for item_ids of length {len(self.item_ids)}"

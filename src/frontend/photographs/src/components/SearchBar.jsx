@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import './SearchBar.css';
+import FilterBar from './FilterBar';
 
 function SearchBar({
   inputRef,
@@ -9,8 +10,13 @@ function SearchBar({
   setSearchQuery,
   uploadedImage,
   setUploadedImage,
+  filepathSearchTerm,
+  setFilepathSearchTerm,
   onSearchByText,
   onSearchByImage,
+  onSearchByDate,
+  searchNearDate,
+  setSearchNearDate,
 }) {
   const [previewUrl, setPreviewUrl] = useState(null);
 
@@ -18,9 +24,11 @@ function SearchBar({
     e.preventDefault();
     
     if (searchMode === 'text') {
-      onSearchByText(searchQuery);
+      onSearchByText(searchQuery, filepathSearchTerm);
     } else if (searchMode === 'image' && uploadedImage) {
       onSearchByImage(uploadedImage);
+    } else if (searchMode === 'date') {
+      onSearchByDate(searchQuery, searchNearDate);
     }
   };
 
@@ -48,13 +56,14 @@ function SearchBar({
   };
 
   const switchMode = (mode) => {
+    if (mode === searchMode) return;
     setSearchMode(mode);
 
-    if (mode === 'text') {
+    if (mode !== 'image') {
       clearImage();
-    } else {
-      setSearchQuery('');
-    }
+    } 
+    setSearchQuery('');
+    
   };
 
   return (
@@ -74,26 +83,40 @@ function SearchBar({
         >
           Image Search
         </button>
+        <button 
+          className={`mode-button ${searchMode === 'date' ? 'active' : ''}`}
+          onClick={() => switchMode('date')}
+          type="button"
+        >
+          Date Search
+        </button>
       </div>
 
       <form onSubmit={handleSubmit}>
         {searchMode === 'text' ? (
-          <>
-            <input
-              ref={inputRef}
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search historical photographs..."
-              className="search-input"
-              aria-label="Search photographs"
+          <div className="vertical-stack">
+            <div className="image-search-container">
+              <input
+                ref={inputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search historical photographs..."
+                className="search-input"
+                aria-label="Search photographs"
+              />
+              <button type="submit" className="search-button" disabled={!searchQuery}>
+                <span className="search-icon">🔍</span>
+                <span className="search-text">Search</span>
+              </button>
+            </div>
+            <FilterBar 
+              filepathSearchTerm={filepathSearchTerm}
+              setFilepathSearchTerm={setFilepathSearchTerm}
             />
-            <button type="submit" className="search-button">
-              <span className="search-icon">🔍</span>
-              <span className="search-text">Search</span>
-            </button>
-          </>
-        ) : (
+          </div>
+          
+        ) : (searchMode === 'image' ? (
           <div className="image-search-container">
             {!previewUrl ? (
               <div className="image-upload">
@@ -130,7 +153,36 @@ function SearchBar({
               <span className="search-text">Find Similar</span>
             </button>
           </div>
-        )}
+        ) : (
+          <>
+            <div className="date-search-block">
+              <input
+                ref={inputRef}
+                type="date"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search historical photographs..."
+                className="search-input"
+                aria-label="Search photographs"
+              />
+              <div className="near-date-checkbox-container">
+                <input
+                  type="checkbox"
+                  checked={searchNearDate}
+                  onChange={(e) => setSearchNearDate(e.target.checked)}
+                  id="near-date-checkbox"
+                  className="include-near-date"
+                  aria-label="Include photographs taken near this date"
+                />
+                <label htmlFor="near-date-checkbox">Include records from near the selected date?</label>
+              </div>
+            </div>
+            <button type="submit" className="search-button" disabled={!searchQuery}>
+              <span className="search-icon">🔍</span>
+              <span className="search-text">Search</span>
+            </button>
+          </>
+        ))}
       </form>
 
       {searchMode === 'text' && (

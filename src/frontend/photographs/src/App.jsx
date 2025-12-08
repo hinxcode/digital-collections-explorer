@@ -2,20 +2,22 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import SearchBar from './components/SearchBar';
 import { ResultsPerPageDropdown } from './components/Pagination';
 import SearchResults from './components/SearchResults';
-import { searchByText, searchByImage, getEmbeddingStats } from './services/api';
+import { searchByText, searchByImage, getEmbeddingStats, searchByDate } from './services/api';
 import './App.css';
 
 function App() {
   const [photos, setPhotos] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filepathSearchTerm, setFilepathSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const searchInputRef = useRef(null);
-  const [searchMode, setSearchMode] = useState('text'); // 'text' or 'image'
+  const [searchMode, setSearchMode] = useState('text'); // 'text', 'image', 'date'
   const [uploadedImage, setUploadedImage] = useState(null);
   const [hasMore, setHasMore] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [resultsPerPage, setResultsPerPage] = useState(50);
+  const [searchNearDate, setSearchNearDate] = useState(false);
   const [embeddingCount, setEmbeddingCount] = useState(null);
 
   useEffect(() => {
@@ -51,7 +53,7 @@ function App() {
     }));
   };
 
-  const handleSearchByText = useCallback(async (query) => {
+  const handleSearchByText = useCallback(async (query, filepathSearchTerm) => {
     if (!query.trim()) {
       setError('Please enter a search term');
       return;
@@ -61,9 +63,10 @@ function App() {
     setError(null);
     setSearchMode('text');
     setSearchQuery(query);
+    setFilepathSearchTerm(filepathSearchTerm);
     
     try {
-      const results = await searchByText(query, resultsPerPage, currentPage);
+      const results = await searchByText(query, resultsPerPage, currentPage, filepathSearchTerm);
       setPhotos(formatPhotosForGallery(results));
       setHasMore(results.length >= resultsPerPage);
     } catch (error) {
@@ -91,13 +94,39 @@ function App() {
     }
   }, [resultsPerPage, currentPage]);
 
+  const handleSearchByDate = useCallback(async (query, searchNearDate) => {
+  if (!query.trim()) {
+    setError('Please enter a search term');
+    return;
+  }
+  
+  setIsLoading(true);
+  setError(null);
+  setSearchMode('date');
+  setSearchQuery(query);
+  setSearchNearDate(searchNearDate);
+  
+  try {
+    const results = await searchByDate(query, resultsPerPage, currentPage, searchNearDate);
+    setPhotos(formatPhotosForGallery(results));
+    setHasMore(results.length >= resultsPerPage);
+  } catch (error) {
+    console.error('Error performing search:', error);
+    setError('Date search failed. Please try again.');
+  } finally {
+    setIsLoading(false);
+  }
+}, [resultsPerPage, currentPage]);
+
   useEffect(() => {
     if (searchMode === 'text' && searchQuery.trim()) {
-      handleSearchByText(searchQuery);
+      handleSearchByText(searchQuery, filepathSearchTerm);
     } else if (searchMode === 'image' && uploadedImage) {
       handleSearchByImage(uploadedImage);
+    } else if (searchMode === 'date' && searchQuery.trim()) {
+      handleSearchByDate(searchQuery, searchNearDate);
     }
-  }, [currentPage, resultsPerPage, searchMode, searchQuery, uploadedImage, handleSearchByText, handleSearchByImage]);
+  }, [currentPage, resultsPerPage, searchMode, searchQuery, searchNearDate, uploadedImage, filepathSearchTerm, handleSearchByText, handleSearchByImage, handleSearchByDate]);
 
   const handleSearchModeChanged = useCallback((mode) => {
     setSearchMode(mode);
@@ -121,10 +150,15 @@ function App() {
             setSearchMode={handleSearchModeChanged}
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
+            searchNearDate={searchNearDate}
+            setSearchNearDate={setSearchNearDate}
             uploadedImage={uploadedImage}
             setUploadedImage={setUploadedImage}
+            filepathSearchTerm={filepathSearchTerm}
+            setFilepathSearchTerm={setFilepathSearchTerm}
             onSearchByText={handleSearchByText}
             onSearchByImage={handleSearchByImage}
+            onSearchByDate={handleSearchByDate}
           />
         </div>
         <ResultsPerPageDropdown

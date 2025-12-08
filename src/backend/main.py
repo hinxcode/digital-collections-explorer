@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 REMOTE_FILES = False
 
+
 @asynccontextmanager
 async def lifespan(app):
     logger.info("Initializing services...")
@@ -34,7 +35,7 @@ async def lifespan(app):
 
     # Clean up cached files downloaded from S3
     if REMOTE_FILES:
-        os.system(f'rm -rf {str(settings.processed_data_dir)}/*')
+        os.system(f"rm -rf {str(settings.processed_data_dir)}/*")
 
 
 app = FastAPI(

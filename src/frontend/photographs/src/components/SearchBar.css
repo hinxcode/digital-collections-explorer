@@ -19,6 +19,7 @@
   transition: border-color 0.3s;
   background-color: #2c2c2c;
   color: #f8f5f0;
+  width: 90%;
 }
 
 .search-input::placeholder {
@@ -193,6 +194,33 @@
   color: #fff;
 }
 
+.date-search-block {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 12px;
+}
+
+.near-date-checkbox-container {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.include-near-date {
+  display: flex; 
+  align-items: center;
+  justify-content: center;
+  accent-color:   #8b5a2b;
+  font-size: 2rem;
+  margin: 5;
+  width: 20px;
+  height: 20px;
+}
+
 @media (max-width: 600px) {
   .search-bar form {
     flex-direction: column;
@@ -202,4 +230,11 @@
     width: 100%;
     padding: 12px;
   }
+}
+
+.vertical-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
 }

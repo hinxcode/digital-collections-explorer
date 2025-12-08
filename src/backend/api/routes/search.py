@@ -1,3 +1,4 @@
+import datetime
 import logging
 from io import BytesIO
 
@@ -7,6 +8,7 @@ from PIL import Image
 from ...models.schemas import SearchResponse, SearchResult
 from ...services.clip_service import clip_service
 from ...services.embedding_service import embedding_service
+from ...services.metadata_search_service import metadata_search_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/search", tags=["search"])
@@ -17,6 +19,7 @@ async def search_by_text(
     query: str,
     limit: int = Query(30, description="Number of results per page"),
     page: int = Query(1, description="Page number for pagination"),
+    filepath_search_term: str = Query("", description="Substring to filter file paths"),
 ):
     """Search for similar content using text query."""
     offset = (page - 1) * limit
@@ -28,7 +31,11 @@ async def search_by_text(
         text_embedding = clip_service.encode_text(query)
         logit_scale = clip_service.model.logit_scale.exp().item()
         raw_results = embedding_service.search(
-            text_embedding, logit_scale=logit_scale, limit=limit, offset=offset
+            text_embedding,
+            logit_scale=logit_scale,
+            limit=limit,
+            offset=offset,
+            filepath_search_term=filepath_search_term,
         )
 
         search_results = [
@@ -69,4 +76,31 @@ async def search_by_image(
         return SearchResponse(results=search_results)
     except Exception as e:
         logger.error(f"Error in image search: {str(e)}")
+        return SearchResponse(results=[])
+
+
+@router.get("/date", response_model=SearchResponse)
+async def search_by_date(
+    query: datetime.date,
+    limit: int = Query(30, description="Number of results per page"),
+    page: int = Query(1, description="Page number for pagination"),
+    searchNearDate: bool = Query(
+        False, description="Whether to search for dates near the target date"
+    ),
+):
+    """Search for similar content using date query."""
+    offset = (page - 1) * limit
+
+    try:
+        raw_results = metadata_search_service.date_search(
+            query, limit=limit, offset=offset, search_near_date=searchNearDate
+        )
+
+        search_results = [
+            SearchResult(id=result["id"], score=1, metadata=result["metadata"])
+            for result in raw_results
+        ]
+        return SearchResponse(results=search_results)
+    except Exception as e:
+        logger.error(f"Error in date search: {str(e)}")
         return SearchResponse(results=[])

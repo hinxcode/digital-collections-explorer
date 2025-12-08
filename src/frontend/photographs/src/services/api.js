@@ -5,12 +5,13 @@ const API_URL = import.meta.env.API_BASE_URL;
  * @param {string} query - The text query
  * @param {number} limit - Maximum number of results to return (default: 50)
  * @param {number} page - Page number for pagination (default: 1)
+ * @param {string} filepathSearchTerm - Substring to filter file paths (default: '')
  * @returns {Promise<Array>} - Array of search results
  */
-export const searchByText = async (query, limit = 50, page = 1) => {
+export const searchByText = async (query, limit = 50, page = 1, filepathSearchTerm = '') => {
   try {
     const pageParam = Math.max(1, parseInt(page) || 1);
-    const response = await fetch(`${API_URL}/api/search/text?query=${encodeURIComponent(query)}&limit=${limit}&page=${pageParam}`);
+    const response = await fetch(`${API_URL}/api/search/text?query=${encodeURIComponent(query)}&limit=${limit}&page=${pageParam}&filepath_search_term=${encodeURIComponent(filepathSearchTerm)}`);
     
     if (!response.ok) {
       throw new Error(`API error: ${response.status}`);
@@ -71,6 +72,31 @@ export const getEmbeddingStats = async () => {
     return data;
   } catch (error) {
     console.error('Error fetching embedding stats:', error);
+    throw error;
+  }
+};
+
+/**
+ * Search for similar photographs by date
+ * @param {string} query - The date query
+ * @param {number} limit - Maximum number of results to return (default: 50)
+ * @param {number} page - Page number for pagination (default: 1)
+ * @returns {Promise<Array>} - Array of search results
+ */
+export const searchByDate = async (query, limit = 50, page = 1, searchNearDate = false) => {
+  try {
+    const pageParam = Math.max(1, parseInt(page) || 1);
+    console.log('searchByDate called with searchNearDate:', searchNearDate);
+    const response = await fetch(`${API_URL}/api/search/date?query=${encodeURIComponent(query)}&limit=${limit}&page=${pageParam}&searchNearDate=${searchNearDate}`);
+    
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+    
+    const { results } = await response.json();
+    return results;
+  } catch (error) {
+    console.error('Error searching photos:', error);
     throw error;
   }
 };

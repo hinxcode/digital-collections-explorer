@@ -27,17 +27,14 @@ def load_config(config_path=None):
 
     return config
 
-def download_file(
-        client: Any,
-        bucket: str,
-        filename: str,
-        destination: str):
+
+def download_file(client: Any, bucket: str, filename: str, destination: str):
     # Get the directory path (everything except the filename)
     directory = os.path.dirname(destination)
-    
+
     # Create the directory structure if it doesn't exist
     # exist_ok=True means no error if directory already exists
     if directory:  # Only create if there's actually a directory path
         os.makedirs(directory, exist_ok=True)
-    
+
     client.download_file(bucket, filename, destination)
