@@ -12,9 +12,11 @@ This project describes out Digital Collections Explorer, available at: [https://
 
 We present Digital Collections Explorer, a web-based, open-source exploratory search platform that leverages CLIP (Contrastive Language-Image Pre-training) for enhanced visual discovery of digital collections. Our Digital Collections Explorer can be installed locally and configured to run on a visual collection of interest on disk in just a few steps. Building upon recent advances in multimodal search techniques, our interface enables natural language queries and reverse image searches over digital collections with visual features. An overview of our system can be seen in the image above.
 
+We are in the process of adding additional capabilities that are currently only available for photography collections. These include a configuration to run on collections stored in AWS S3 buckets, the option to limit the natural language search to sub-directories of the collection, and the option to perform a search on the original date of the photographs.
+
 ## Features
 
-- Multimodal search capabilities using both text and image inputs
+- Multimodal search capabilities using text, image, and metadata inputs (for photographs)
 - Support for various digital collection types:
   - Historical maps
   - Photographs
@@ -75,6 +77,12 @@ python -m src.models.clip.generate_embeddings
 
 This will process all images found in `raw_data_dir` and create embeddings in `embeddings_dir` (both set in `config.json`).
 
+If your data is stored in an S3 bucket instead of locally, ensure your default AWS profile has read and list access to your bucket, then run the above command with the following arguments:
+
+```bash
+python -m src.models.clip.generate_embeddings --use-remote --bucket <BUCKETNAME> --prefix <PREFIX>
+```
+
 ### Step 5: Start the Backend Server
 
 ```bash
@@ -82,6 +90,8 @@ python -m src.backend.main
 ```
 
 The API server will start at http://localhost:8000
+
+If your data is stored in S3, change the REMOTE flag in src.backend.main to True.
 
 ### Customizing the Frontend
 

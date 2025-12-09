@@ -11,11 +11,15 @@ from .api.routes import embeddings, images, search
 from .core.config import settings
 from .services.embedding_service import embedding_service
 
+import os
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+REMOTE_FILES = False
 
 
 @asynccontextmanager
@@ -28,6 +32,10 @@ async def lifespan(app):
     logger.info(f"Debug mode: {settings.debug}")
 
     yield
+
+    # Clean up cached files downloaded from S3
+    if REMOTE_FILES:
+        os.system(f"rm -rf {str(settings.processed_data_dir)}/*")
 
 
 app = FastAPI(
