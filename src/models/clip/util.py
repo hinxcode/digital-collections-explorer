@@ -12,11 +12,12 @@ def get_file_names(
         prefix: str):
     
     paginator = client.get_paginator('list_objects_v2')
-    pages = paginator.paginate(Bucket=bucket, Prefix=prefix)
+    pages = paginator.paginate(Bucket=bucket, Prefix=prefix, Delimiter='/')
     filenames = []
     for page in pages:
         for obj in page['Contents']:
-            filenames.append(obj["Key"])
+            if not obj["Key"].endswith("/"):
+                filenames.append(obj["Key"])
     return filenames
 
 def download_file(

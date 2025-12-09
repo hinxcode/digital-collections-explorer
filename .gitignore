@@ -51,6 +51,9 @@ data/thumbnails/*
 !data/processed/.gitkeep
 !data/embeddings/.gitkeep
 !data/thumbnails/.gitkeep
+data--aip
+data--SephardicStudies
+
 # Model files
 *.pth
 *.pt

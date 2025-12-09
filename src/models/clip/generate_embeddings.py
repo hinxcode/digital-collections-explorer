@@ -16,6 +16,9 @@ from typing import Dict, Any
 import PyPDF2
 import base64
 import argparse
+from PIL import Image
+from datetime import datetime
+
 
 from transformers import CLIPModel, CLIPProcessor
 
@@ -96,6 +99,11 @@ def process_pdf(
             with open(file_path, "rb") as f:
                 pdf = PyPDF2.PdfReader(f)
                 n_pages = len(pdf.pages)
+                metadata = pdf.metadata
+                if metadata and "/CreationDate" in metadata:
+                    pdf_date = datetime.strptime(metadata["/CreationDate"], '%Y:%m:%d %H:%M:%S')
+                else:
+                    pdf_date = None
         except Exception as e:
             logger.error(f"Error reading PDF metadata: {file_path}, error: {e}")
             return None
@@ -153,6 +161,7 @@ def process_pdf(
                 "type": "pdf_page",
                 "page": i,
                 "n_pages": n_pages,
+                "date": pdf_date.strftime('%Y-%m-%d %H:%M:%S') if pdf_date else None,
                 "paths": {
                     "original": str(file_path),
                     "processed": str(pdf_processed_dir / f"{i}.jpg") 
@@ -213,10 +222,27 @@ def process_image(
             .decode("utf-8")
             .rstrip("=")
         )
+        image_date = None
+
+        with Image.open(file_path) as img:
+            img.verify()  # Verify that it is, in fact, an image
+            exif_data = img._getexif()
+            if exif_data:
+                # Exif tag 36867 corresponds to 'DateTimeOriginal'
+                datetime_original_tag = 306
+                if datetime_original_tag in exif_data:
+                    datetime_str = exif_data[datetime_original_tag]
+                    # Convert the string to a datetime object
+                    try:
+                        image_date = datetime.strptime(datetime_str, '%Y:%m:%d %H:%M:%S')
+                    except ValueError:
+                        logger.error(f"Failed to parse date from {image}: {datetime_str}")
+                        image_date = None
 
         metadata = {
             "file_name": file_path.name,
             "type": "image",
+            "date": image_date.strftime('%Y-%m-%d %H:%M:%S') if image_date else None,
             "paths": {
                 "original": str(file_path),
                 "processed": str(processed_image_path)

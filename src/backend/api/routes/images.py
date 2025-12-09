@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 
 import boto3
+import os
 
 from src.backend.services.embedding_service import embedding_service
 import src.backend.utils.helpers as helpers
@@ -41,10 +42,13 @@ async def get_image_by_id(
     ):
         path_str = doc["metadata"]["paths"]["processed"]
         if doc["metadata"]["remote"]:
-            s3_client = boto3.session.Session().client('s3')
             local_dir = f"{doc['metadata']['processed_dir']}/{path_str}"
-            helpers.download_file(s3_client, doc["metadata"]["bucket"], path_str, local_dir)
-            path_str = local_dir
+            if os.path.exists(local_dir):
+                path_str = local_dir
+            else:
+                s3_client = boto3.session.Session().client('s3')
+                helpers.download_file(s3_client, doc["metadata"]["bucket"], path_str, local_dir)
+                path_str = local_dir
     else:
         raise HTTPException(
             status_code=404, detail="Image path not found in document metadata"
