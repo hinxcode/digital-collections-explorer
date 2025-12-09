@@ -7,15 +7,18 @@ def create_client():
     client = boto3.session.Session().client("s3")
     return client
 
-
-def get_file_names(client: Any, bucket: str, prefix: str):
-
-    paginator = client.get_paginator("list_objects_v2")
-    pages = paginator.paginate(Bucket=bucket, Prefix=prefix)
+def get_file_names(
+        client: Any, 
+        bucket: str,
+        prefix: str):
+    
+    paginator = client.get_paginator('list_objects_v2')
+    pages = paginator.paginate(Bucket=bucket, Prefix=prefix, Delimiter='/')
     filenames = []
     for page in pages:
-        for obj in page["Contents"]:
-            filenames.append(obj["Key"])
+        for obj in page['Contents']:
+            if not obj["Key"].endswith("/"):
+                filenames.append(obj["Key"])
     return filenames
 
 

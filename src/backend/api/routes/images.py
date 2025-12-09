@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 
 import boto3
+import os
 
 from src.backend.services.embedding_service import embedding_service
 import src.backend.utils.helpers as helpers
