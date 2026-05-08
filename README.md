@@ -71,7 +71,7 @@ pip install -r requirements.txt
 2. Generate embeddings for your collection:
 
 ```bash
-python -m src.models.clip.generate_embeddings
+python -m src.models.generate_embeddings
 ```
 
 This will process all images found in `raw_data_dir` and create embeddings in `embeddings_dir` (both set in `config.json`).

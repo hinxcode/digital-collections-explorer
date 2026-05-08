@@ -13,9 +13,8 @@ from pdf2image import convert_from_path
 from PIL import Image
 
 from src.backend.core.config import settings
-from src.backend.services.embedding_service_factory import \
-    create_embedding_service
-from src.backend.utils.helpers import extract_embeddings
+from src.backend.services.base_embedding_service import BaseEmbeddingService
+from src.backend.services.embedding_service_factory import create_embedding_service
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -34,20 +33,14 @@ class ProcessingResult:
 
 
 def generate_embeddings(
-    model, processor, images, device="cuda", timing_info: Dict[str, float] = None
+    service: BaseEmbeddingService,
+    images,
+    timing_info: Dict[str, float] = None,
 ):
     """Generate embeddings for a list of images"""
     start_time = time.time()
     try:
-        inputs = processor(images=images, return_tensors="pt", padding=True)
-        inputs = {k: v.to(device) for k, v in inputs.items()}
-
-        with torch.no_grad():
-            image_features = model.get_image_features(**inputs)
-            embeddings = extract_embeddings(image_features)
-            embeddings = embeddings / embeddings.norm(dim=-1, keepdim=True)
-
-        return embeddings.cpu()
+        return service.encode_image(images)
     except Exception as e:
         logger.error(f"Error generating embeddings: {e}")
         return None
@@ -60,9 +53,7 @@ def generate_embeddings(
 def process_pdf(
     file_path,
     raw_data_dir,
-    model,
-    processor,
-    device,
+    service: BaseEmbeddingService,
     processed_dir,
     thumbnails_dir,
     timing_info: Dict[str, float],
@@ -113,9 +104,7 @@ def process_pdf(
                 processed_image_path = pdf_processed_dir / f"{i}.jpg"
                 processed_image.save(processed_image_path, "JPEG", quality=90)
 
-                page_embedding = generate_embeddings(
-                    model, processor, [image], device, timing_info
-                )
+                page_embedding = generate_embeddings(service, [image], timing_info)
                 if page_embedding is not None:
                     embeddings_list.append(
                         page_embedding[0]
@@ -162,9 +151,7 @@ def process_pdf(
 def process_image(
     file_path,
     raw_data_dir,
-    model,
-    processor,
-    device,
+    service: BaseEmbeddingService,
     processed_dir,
     thumbnails_dir,
     timing_info: Dict[str, float],
@@ -187,7 +174,7 @@ def process_image(
         processed_image_path = image_processed_dir / "0.jpg"
         processed_image.save(processed_image_path, "JPEG", quality=90)
 
-        embedding = generate_embeddings(model, processor, [image], device, timing_info)
+        embedding = generate_embeddings(service, [image], timing_info)
         if embedding is None:
             return None
 
@@ -215,9 +202,7 @@ def process_image(
 
 
 def process_files(
-    model: Any,
-    processor: Any,
-    device: str,
+    service: BaseEmbeddingService,
     raw_data_dir: Path,
     processed_dir: Path,
     thumbnails_dir: Path,
@@ -265,9 +250,7 @@ def process_files(
                 results = process_pdf(
                     file_path,
                     raw_data_dir,
-                    model,
-                    processor,
-                    device,
+                    service,
                     processed_dir,
                     thumbnails_dir,
                     timing_info,
@@ -276,9 +259,7 @@ def process_files(
                 results = process_image(
                     file_path,
                     raw_data_dir,
-                    model,
-                    processor,
-                    device,
+                    service,
                     processed_dir,
                     thumbnails_dir,
                     timing_info,
@@ -316,23 +297,16 @@ def main():
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     THUMBNAILS_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Create embedding service using factory
-    embedding_model_service = create_embedding_service()
+    service = create_embedding_service()
     logger.info(
-        f"Using {embedding_model_service.get_model_type().upper()} model: {embedding_model_service.model_name}"
+        f"Using {service.get_model_type().upper()} model: {service.model_name}"
     )
-    logger.info(f"Using device: {embedding_model_service.device}")
-
-    model = embedding_model_service.model
-    processor = embedding_model_service.processor
-    DEVICE = embedding_model_service.device
+    logger.info(f"Using device: {service.device}")
 
     embedding_timing_info = {"total_duration": 0.0}
 
     result = process_files(
-        model,
-        processor,
-        DEVICE,
+        service,
         RAW_DATA_DIR,
         PROCESSED_DIR,
         THUMBNAILS_DIR,
