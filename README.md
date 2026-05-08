@@ -26,7 +26,7 @@ We present Digital Collections Explorer, a web-based, open-source exploratory se
 
 ### Prerequisites
 
-- Python 3.8+
+- Python 3.10+
 - Node.js 14+
 - Git
 - Docker (optional, for containerized deployment)
