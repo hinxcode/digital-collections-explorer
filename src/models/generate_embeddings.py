@@ -298,9 +298,7 @@ def main():
     THUMBNAILS_DIR.mkdir(parents=True, exist_ok=True)
 
     service = create_embedding_service()
-    logger.info(
-        f"Using {service.get_model_type().upper()} model: {service.model_name}"
-    )
+    logger.info(f"Using {service.get_model_type().upper()} model: {service.model_name}")
     logger.info(f"Using device: {service.device}")
 
     embedding_timing_info = {"total_duration": 0.0}

@@ -108,9 +108,7 @@ class EmbeddingService:
     ) -> List[Dict[str, Any]]:
         """Search by query embedding; optional score_transform on raw similarities."""
         try:
-            scores = torch.matmul(
-                self.embeddings, query_embedding.t()
-            ).squeeze()
+            scores = torch.matmul(self.embeddings, query_embedding.t()).squeeze()
             if score_transform is not None:
                 scores = score_transform(scores)
 
