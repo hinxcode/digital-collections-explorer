@@ -2,7 +2,7 @@ import json
 import logging
 import traceback
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import torch
 
@@ -102,19 +102,20 @@ class EmbeddingService:
     def search(
         self,
         query_embedding: torch.Tensor,
-        logit_scale: Optional[float] = None,
+        score_transform: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
         limit: int = 20,
         offset: int = 0,
     ) -> List[Dict[str, Any]]:
-        """Search for similar items using query embedding with pagination"""
+        """Search by query embedding; optional score_transform on raw similarities."""
         try:
-            similarities = torch.matmul(self.embeddings, query_embedding.t()).squeeze()
+            scores = torch.matmul(
+                self.embeddings, query_embedding.t()
+            ).squeeze()
+            if score_transform is not None:
+                scores = score_transform(scores)
 
-            if logit_scale is not None:
-                similarities = similarities * logit_scale
-
-            top_k = min(offset + limit, len(similarities))
-            top_scores, top_indices = torch.topk(similarities, k=top_k)
+            top_k = min(offset + limit, len(scores))
+            top_scores, top_indices = torch.topk(scores, k=top_k)
 
             start_idx = min(offset, len(top_indices))
             end_idx = min(offset + limit, len(top_indices))
