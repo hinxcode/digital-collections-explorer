@@ -18,7 +18,7 @@ except ImportError:
     logger = logging.getLogger(__name__)
     logger.warning(
         "SigLIP support not available. "
-        "Install transformers>=5.0.0 to use SigLIP models: "
+        "Install transformers>=4.42.0 to use SigLIP models: "
         "pip install --upgrade transformers"
     )
 
@@ -36,8 +36,7 @@ def create_embedding_service() -> BaseEmbeddingService:
         ValueError: If model_type is not supported
     """
 
-    # Set default model type to clip if not set in config for backwards compatibility
-    model_type = settings.model_type.lower() or "clip"
+    model_type = settings.model_type.lower()
     model_name = settings.model_name
     device = settings.device
 
@@ -48,8 +47,8 @@ def create_embedding_service() -> BaseEmbeddingService:
     elif model_type == "siglip":
         if not SIGLIP_AVAILABLE:
             raise ImportError(
-                "SigLIP support requires transformers>=5.0.0. "
-                "Please upgrade: pip install --upgrade 'transformers>=5.0.0'"
+                "SigLIP support requires transformers>=4.42.0. "
+                "Please upgrade: pip install --upgrade 'transformers>=4.42.0'"
             )
         return SiglipService(model_name=model_name, device=device)
     else:
@@ -60,7 +59,3 @@ def create_embedding_service() -> BaseEmbeddingService:
             f"Unsupported model_type: {model_type}. "
             f"Supported types: {', '.join(repr(t) for t in supported_types)}"
         )
-
-
-# Create the singleton instance
-embedding_service = create_embedding_service()

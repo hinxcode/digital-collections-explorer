@@ -50,3 +50,7 @@ class CLIPService(BaseEmbeddingService):
             embeddings = extract_embeddings(image_features)
             embeddings = embeddings / embeddings.norm(dim=-1, keepdim=True)
         return embeddings.cpu()
+
+    def transform_score(self, similarities: torch.Tensor) -> torch.Tensor:
+        logit_scale = self.model.logit_scale.exp().item()
+        return similarities * logit_scale

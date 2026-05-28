@@ -7,8 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.backend.services.clip_service import CLIPService
-from src.backend.services.embedding_service_factory import \
-    create_embedding_service
+from src.backend.services.embedding_service_factory import create_embedding_service
 from src.backend.services.siglip_service import SiglipService
 
 

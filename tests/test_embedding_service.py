@@ -226,10 +226,10 @@ class TestSearch:
         assert all("score" in r for r in results)
         assert all("metadata" in r for r in results)
 
-    def test_search_with_logit_scale(
+    def test_search_with_score_transform(
         self, embedding_service, mock_embeddings, mock_item_ids, mock_metadata
     ):
-        """Test search with logit scale parameter"""
+        """Test search with a score_transform callable applied to raw similarities"""
         embedding_service.is_loaded = True
         embedding_service.embeddings = mock_embeddings
         embedding_service.item_ids = mock_item_ids
@@ -237,9 +237,15 @@ class TestSearch:
 
         query_embedding = torch.randn(512, 1)
 
-        results = embedding_service.search(query_embedding, logit_scale=2.5, limit=5)
+        baseline = embedding_service.search(query_embedding, limit=5)
+        scaled = embedding_service.search(
+            query_embedding, score_transform=lambda s: s * 2.5, limit=5
+        )
 
-        assert len(results) <= 5
+        assert len(scaled) <= 5
+        assert [r["id"] for r in scaled] == [r["id"] for r in baseline]
+        for b, s in zip(baseline, scaled):
+            assert s["score"] == pytest.approx(b["score"] * 2.5, rel=1e-5)
 
     def test_search_with_pagination(
         self, embedding_service, mock_embeddings, mock_item_ids, mock_metadata

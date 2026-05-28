@@ -27,7 +27,7 @@ We present Digital Collections Explorer, a web-based, open-source exploratory se
 
 ### Prerequisites
 
-- Python 3.8+
+- Python 3.10+
 - Node.js 14+
 - Git
 - Docker (optional, for containerized deployment)
@@ -72,7 +72,7 @@ pip install -r requirements.txt
 2. Generate embeddings for your collection:
 
 ```bash
-python -m src.models.clip.generate_embeddings
+python -m src.models.generate_embeddings
 ```
 
 This will process all images found in `raw_data_dir` and create embeddings in `embeddings_dir` (both set in `config.json`).

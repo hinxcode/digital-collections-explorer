@@ -77,3 +77,8 @@ class BaseEmbeddingService(ABC):
     def get_model_type(self) -> str:
         """Return the model type identifier (e.g., 'clip', 'siglip')"""
         pass
+
+    @abstractmethod
+    def transform_score(self, similarities: torch.Tensor) -> torch.Tensor:
+        """Apply model-specific scoring to raw cosine similarities."""
+        pass

@@ -94,7 +94,7 @@ We welcome code contributions including:
 4. **Generate test embeddings** (optional, for testing)
    ```bash
    # Add some test images to data/raw
-   python -m src.models.clip.generate_embeddings
+   python -m src.models.generate_embeddings
    ```
 
 5. **Start the backend server**

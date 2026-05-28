@@ -5,10 +5,10 @@
   "embeddings_dir": "data/embeddings",
   "thumbnails_dir": "data/thumbnails",
   "model_config": {
-    "model_type": "siglip",
-    "model_name": "google/siglip-base-patch16-256-multilingual",
+    "model_type": "clip",
+    "model_name": "openai/clip-vit-base-patch32",
     "batch_size": 32,
-    "device": "mps"
+    "device": "cuda"
   },
   "api_config": {
     "host": "0.0.0.0",

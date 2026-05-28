@@ -6,8 +6,9 @@ from PIL import Image
 
 from ...models.schemas import SearchResponse, SearchResult
 from ...services.embedding_service import embedding_service
-from ...services.embedding_service_factory import \
-    embedding_service as model_service
+from ...services.embedding_service_factory import create_embedding_service
+
+model_service = create_embedding_service()
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/search", tags=["search"])
@@ -27,9 +28,11 @@ async def search_by_text(
             embedding_service.load_embeddings()
 
         text_embedding = model_service.encode_text(query)
-        logit_scale = model_service.model.logit_scale.exp().item()
         raw_results = embedding_service.search(
-            text_embedding, logit_scale=logit_scale, limit=limit, offset=offset
+            text_embedding,
+            score_transform=model_service.transform_score,
+            limit=limit,
+            offset=offset,
         )
 
         search_results = [
@@ -58,7 +61,10 @@ async def search_by_image(
         image = Image.open(BytesIO(image_data)).convert("RGB")
         image_embedding = model_service.encode_image(image)
         raw_results = embedding_service.search(
-            image_embedding, limit=limit, offset=offset
+            image_embedding,
+            score_transform=model_service.transform_score,
+            limit=limit,
+            offset=offset,
         )
 
         search_results = [
