@@ -1,0 +1,16 @@
+# Optional dependencies for ImageBind (audio/video) support.
+# Install into the backend venv ONLY when using the "multimedia" collection type:
+#   pip install -r requirements-imagebind.txt
+#
+# ImageBind is heavy (~4.5 GB pretrained checkpoint on first load) and pins to
+# torch 2.0+ / Python 3.10. It is kept out of the main requirements.txt so the
+# default CLIP/SigLIP install stays light and conflict-free.
+
+# ImageBind model + its own data loaders (imagebind.data, imagebind.models)
+imagebind @ git+https://github.com/facebookresearch/ImageBind.git
+
+# Audio decoding for waveform thumbnails and ImageBind audio transform
+soundfile>=0.12.0
+
+# Video frame extraction (poster frames + video embedding sampling)
+imageio[ffmpeg]>=2.31.0

@@ -51,6 +51,7 @@ Available collection types:
 - `photographs`: For photo collections and image archives
 - `maps`: For map collections
 - `documents`: For born-digital documents collections
+- `multimedia`: For mixed-media collections — images, audio, and video together in a single cross-modal index
 
 This will configure the project for your specific collection type and build the frontend.
 
@@ -115,6 +116,35 @@ This project also supports [SigLIP](https://arxiv.org/abs/2303.15343) which is a
 }
 ```
 
+### Using ImageBind
+
+This project also supports [ImageBind](https://github.com/facebookresearch/ImageBind), which embeds text, images, **audio**, and **video** into a single shared space. This lets a plain text query (e.g. "ocean waves", "dog barking") retrieve audio and video clips, and enables reverse search. It powers the `multimedia` collection type.
+
+```json
+{
+  "collection_type": "multimedia",
+  "model_config": {
+    "model_type": "imagebind",
+    "model_name": "imagebind_huge",
+    "device": "cpu"
+  }
+}
+```
+
+A ready-made `config.imagebind.example.json` is included — copy it to `config.json` to get started.
+
+ImageBind is an optional, heavy dependency (a ~4.5 GB checkpoint downloads on first model load) with pins that can conflict with the default CLIP/SigLIP stack, so it is **not** in the main `requirements.txt`. Install it separately:
+
+```bash
+pip install -r requirements-imagebind.txt
+```
+
+> **Recommended:** install ImageBind into a **separate Python 3.10 virtual environment** dedicated to the multimedia collection. ImageBind targets Python 3.10 / torch 2.0+, and a collection only ever runs one model type at a time, so isolating it avoids dependency clashes with your CLIP/SigLIP environment.
+
+A multimedia collection can mix modalities freely — add images (`.jpg/.png/…`), audio (`.wav/.mp3/.flac/.m4a/.ogg`), and video (`.mp4/.mov/.avi/.mkv/.webm`) to `raw_data_dir`, and they are all embedded into the same shared space. A single text query (or an uploaded image) then retrieves across every type at once. Run `python -m src.models.generate_embeddings` to build the index, then `npm run setup -- --type=multimedia` to build the frontend.
+
+> **WIP / TODO:** PDFs are intentionally excluded from `multimedia` collections for now. ImageBind can embed PDF pages, but the multimedia frontend has no multi-page PDF viewer yet (use the `documents` collection for PDFs). Multi-page PDF support in the multimedia UI is planned.
+
 **Device options:**
 
 - `"mps"` - Apple Silicon GPU (M1/M2/M3/M4)
@@ -140,7 +170,7 @@ For active development with hot-reloading:
 python -m src.backend.main
 
 # Start the frontend development server
-cd src/frontend/[photographs|maps|documents]
+cd src/frontend/[photographs|maps|documents|multimedia]
 npm run dev
 ```
 

@@ -22,6 +22,22 @@ except ImportError:
         "pip install --upgrade transformers"
     )
 
+# Try to import ImageBind support (requires the optional imagebind package)
+try:
+    import imagebind  # noqa: F401
+
+    from .imagebind_service import ImageBindService
+
+    IMAGEBIND_AVAILABLE = True
+except ImportError:
+    IMAGEBIND_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.warning(
+        "ImageBind support not available. "
+        "Install the optional dependencies to use ImageBind: "
+        "pip install -r requirements-imagebind.txt"
+    )
+
 logger = logging.getLogger(__name__)
 
 
@@ -51,10 +67,19 @@ def create_embedding_service() -> BaseEmbeddingService:
                 "Please upgrade: pip install --upgrade 'transformers>=4.42.0'"
             )
         return SiglipService(model_name=model_name, device=device)
+    elif model_type == "imagebind":
+        if not IMAGEBIND_AVAILABLE:
+            raise ImportError(
+                "ImageBind support requires the optional imagebind package. "
+                "Please install: pip install -r requirements-imagebind.txt"
+            )
+        return ImageBindService(model_name=model_name, device=device)
     else:
         supported_types = ["clip"]
         if SIGLIP_AVAILABLE:
             supported_types.append("siglip")
+        if IMAGEBIND_AVAILABLE:
+            supported_types.append("imagebind")
         raise ValueError(
             f"Unsupported model_type: {model_type}. "
             f"Supported types: {', '.join(repr(t) for t in supported_types)}"

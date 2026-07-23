@@ -1,0 +1,18 @@
+{
+  "collection_type": "multimedia",
+  "raw_data_dir": "data/raw",
+  "processed_data_dir": "data/processed",
+  "embeddings_dir": "data/embeddings",
+  "thumbnails_dir": "data/thumbnails",
+  "model_config": {
+    "model_type": "imagebind",
+    "model_name": "imagebind_huge",
+    "batch_size": 32,
+    "device": "cpu"
+  },
+  "api_config": {
+    "host": "0.0.0.0",
+    "port": 8000,
+    "debug": false
+  }
+}

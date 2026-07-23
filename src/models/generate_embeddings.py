@@ -148,6 +148,150 @@ def process_pdf(
         return None
 
 
+def _render_waveform(audio_path, out_path, size):
+    """Render an audio waveform image so audio clips get a visual card in the UI."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import soundfile as sf
+
+    data, _ = sf.read(str(audio_path))
+    if getattr(data, "ndim", 1) > 1:
+        data = data.mean(axis=1)  # mix down to mono
+
+    max_points = 8000  # downsample purely for plotting speed
+    if len(data) > max_points:
+        data = data[:: len(data) // max_points]
+
+    dpi = 100
+    fig = plt.figure(figsize=(size[0] / dpi, size[1] / dpi), dpi=dpi)
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.plot(data, linewidth=0.5, color="#4a90d9")
+    ax.axis("off")
+    fig.savefig(str(out_path), format="jpg")
+    plt.close(fig)
+
+
+def _save_video_poster(video_path, thumbnail_path, processed_path):
+    """Save a representative (middle) video frame as thumbnail + poster."""
+    import imageio
+
+    reader = imageio.get_reader(str(video_path))
+    try:
+        try:
+            total = reader.count_frames()
+        except Exception:
+            total = 0
+        idx = total // 2 if total and total > 0 else 0
+        try:
+            frame = reader.get_data(idx)
+        except Exception:
+            frame = reader.get_data(0)
+        img = Image.fromarray(frame).convert("RGB")
+    finally:
+        reader.close()
+
+    thumb = img.copy()
+    thumb.thumbnail((400, 400), Image.Resampling.LANCZOS)
+    thumb.save(thumbnail_path, "JPEG", quality=80)
+
+    poster = img.copy()
+    poster.thumbnail((1280, 1280), Image.Resampling.LANCZOS)
+    poster.save(processed_path, "JPEG", quality=90)
+
+
+def _encode_id(file_path: Path, raw_data_dir) -> str:
+    """Build the base64 item id from a file's path relative to raw_data_dir."""
+    relative_path_str = str(file_path.relative_to(raw_data_dir))
+    return (
+        base64.urlsafe_b64encode(relative_path_str.encode("utf-8"))
+        .decode("utf-8")
+        .rstrip("=")
+    )
+
+
+def process_audio(
+    file_path,
+    raw_data_dir,
+    service: BaseEmbeddingService,
+    processed_dir,
+    thumbnails_dir,
+    timing_info: Dict[str, float],
+):
+    """Process an audio file: render a waveform card and embed it with ImageBind."""
+    try:
+        file_path = Path(file_path)
+
+        audio_processed_dir = processed_dir / file_path.stem
+        audio_processed_dir.mkdir(parents=True, exist_ok=True)
+        thumbnail_path = thumbnails_dir / f"{file_path.stem}.jpg"
+        processed_image_path = audio_processed_dir / "0.jpg"
+
+        _render_waveform(file_path, thumbnail_path, size=(400, 400))
+        _render_waveform(file_path, processed_image_path, size=(1200, 600))
+
+        start_time = time.time()
+        embedding = service.encode_audio([str(file_path)])
+        timing_info["total_duration"] += time.time() - start_time
+        if embedding is None:
+            return None
+
+        metadata = {
+            "file_name": file_path.name,
+            "type": "audio",
+            "paths": {
+                "original": str(file_path),
+                "processed": str(processed_image_path),
+                "thumbnail": str(thumbnail_path),
+            },
+        }
+        return [(_encode_id(file_path, raw_data_dir), embedding[0], metadata)]
+    except Exception as e:
+        logger.error(f"Error processing audio {file_path}: {e}")
+        return None
+
+
+def process_video(
+    file_path,
+    raw_data_dir,
+    service: BaseEmbeddingService,
+    processed_dir,
+    thumbnails_dir,
+    timing_info: Dict[str, float],
+):
+    """Process a video file: save a poster frame and embed it with ImageBind."""
+    try:
+        file_path = Path(file_path)
+
+        video_processed_dir = processed_dir / file_path.stem
+        video_processed_dir.mkdir(parents=True, exist_ok=True)
+        thumbnail_path = thumbnails_dir / f"{file_path.stem}.jpg"
+        processed_image_path = video_processed_dir / "0.jpg"
+
+        _save_video_poster(file_path, thumbnail_path, processed_image_path)
+
+        start_time = time.time()
+        embedding = service.encode_video([str(file_path)])
+        timing_info["total_duration"] += time.time() - start_time
+        if embedding is None:
+            return None
+
+        metadata = {
+            "file_name": file_path.name,
+            "type": "video",
+            "paths": {
+                "original": str(file_path),
+                "processed": str(processed_image_path),
+                "thumbnail": str(thumbnail_path),
+            },
+        }
+        return [(_encode_id(file_path, raw_data_dir), embedding[0], metadata)]
+    except Exception as e:
+        logger.error(f"Error processing video {file_path}: {e}")
+        return None
+
+
 def process_image(
     file_path,
     raw_data_dir,
@@ -214,6 +358,8 @@ def process_files(
     supported_extensions = {
         "pdf": ["pdf"],
         "image": ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "webp"],
+        "audio": ["wav", "mp3", "flac", "m4a", "ogg"],
+        "video": ["mp4", "mov", "avi", "mkv", "webm"],
     }
 
     files_to_process = []
@@ -225,8 +371,22 @@ def process_files(
             ext = file_path.suffix.lower().lstrip(".")
             is_image = ext in supported_extensions["image"]
             is_pdf = ext in supported_extensions["pdf"]
+            is_audio = ext in supported_extensions["audio"]
+            is_video = ext in supported_extensions["video"]
 
-            if is_image or is_pdf and settings.collection_type != "photographs":
+            if is_image:
+                files_to_process.append(file_path)
+            elif is_pdf and settings.collection_type not in (
+                "photographs",
+                "multimedia",
+            ):
+                # TODO(WIP): PDF is excluded from `multimedia` for now. ImageBind
+                # can embed PDF pages, but the multimedia frontend has no multi-page
+                # PDF viewer (unlike the `documents` collection), so a PDF would
+                # render as a single non-navigable page. Revisit once the multimedia
+                # UI gains page navigation.
+                files_to_process.append(file_path)
+            elif (is_audio or is_video) and settings.collection_type == "multimedia":
                 files_to_process.append(file_path)
             else:
                 skipped_items_count += 1
@@ -245,7 +405,10 @@ def process_files(
             ext = file_path.suffix.lower().lstrip(".")
             is_image = ext in supported_extensions["image"]
             is_pdf = ext in supported_extensions["pdf"]
+            is_audio = ext in supported_extensions["audio"]
+            is_video = ext in supported_extensions["video"]
 
+            results = None
             if is_pdf:
                 results = process_pdf(
                     file_path,
@@ -257,6 +420,24 @@ def process_files(
                 )
             elif is_image:
                 results = process_image(
+                    file_path,
+                    raw_data_dir,
+                    service,
+                    processed_dir,
+                    thumbnails_dir,
+                    timing_info,
+                )
+            elif is_audio:
+                results = process_audio(
+                    file_path,
+                    raw_data_dir,
+                    service,
+                    processed_dir,
+                    thumbnails_dir,
+                    timing_info,
+                )
+            elif is_video:
+                results = process_video(
                     file_path,
                     raw_data_dir,
                     service,

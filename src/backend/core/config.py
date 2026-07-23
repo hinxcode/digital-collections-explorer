@@ -8,6 +8,7 @@ from pydantic_settings import BaseSettings
 class ModelType(str, Enum):
     CLIP = "clip"
     SIGLIP = "siglip"
+    IMAGEBIND = "imagebind"
 
 
 class DeviceType(str, Enum):

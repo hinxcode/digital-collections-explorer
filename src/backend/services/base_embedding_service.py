@@ -73,6 +73,34 @@ class BaseEmbeddingService(ABC):
         """
         pass
 
+    def encode_audio(self, audio) -> torch.Tensor:
+        """
+        Encode audio to embeddings
+
+        Args:
+            audio: Audio file path or list of audio file paths
+
+        Returns:
+            Normalized embeddings tensor on CPU
+        """
+        raise NotImplementedError(
+            f"{self.get_model_type()} does not support audio encoding"
+        )
+
+    def encode_video(self, video) -> torch.Tensor:
+        """
+        Encode video to embeddings
+
+        Args:
+            video: Video file path or list of video file paths
+
+        Returns:
+            Normalized embeddings tensor on CPU
+        """
+        raise NotImplementedError(
+            f"{self.get_model_type()} does not support video encoding"
+        )
+
     @abstractmethod
     def get_model_type(self) -> str:
         """Return the model type identifier (e.g., 'clip', 'siglip')"""
