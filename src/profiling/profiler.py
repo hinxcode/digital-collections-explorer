@@ -11,6 +11,7 @@ from PIL import Image, ImageFile
 from .models import (
     Capabilities,
     Capability,
+    CatalogCandidate,
     CollectionProfile,
     Decision,
     DirectorySignal,
@@ -61,6 +62,14 @@ SERVING_BASE_RAM_BYTES = 400 * 1024 * 1024
 
 # Typical S3 throughput to an EC2 instance in the same region.
 IN_REGION_BYTES_PER_SECOND = 100 * 1024 * 1024
+
+# Files that may describe the images. Below these sizes a file cannot hold real
+# content: an empty .xlsx workbook is already about 4 KB, and a text table
+# needs at least a header row.
+CATALOG_EXTS = {"csv", "tsv", "xlsx", "xls", "json", "xml", "parquet"}
+MIN_CATALOG_BYTES = {"xlsx": 2048, "xls": 2048, "parquet": 256}
+MIN_TEXT_CATALOG_BYTES = 64
+MAX_CATALOG_CANDIDATES = 10
 
 TINY_IMAGE_BYTES = 10_240
 LARGE_SOURCE_BYTES = 20 * 1024**3
@@ -187,6 +196,7 @@ def scan(
     junk = Counter()
     other_exts = Counter()
     unreadable: list[str] = []
+    catalogs: list[FileRef] = []
 
     for ref in source.iter_files():
         stats.total_files += 1
@@ -205,6 +215,8 @@ def scan(
         else:
             stats.non_image_files += 1
             other_exts[ref.ext or "no extension"] += 1
+            if ref.ext in CATALOG_EXTS:
+                catalogs.append(ref)
         if progress and stats.total_files % PROGRESS_EVERY_FILES == 0:
             print(f"    scanned {stats.total_files:,} files...", flush=True)
         if max_files and stats.total_files >= max_files:
@@ -212,6 +224,9 @@ def scan(
 
     sizes = [ref.size for ref in images]
     stats.size_percentiles = percentiles(sizes)
+    stats.catalog_candidates = [
+        catalog_candidate(ref) for ref in catalogs[:MAX_CATALOG_CANDIDATES]
+    ]
     for name, count in junk.most_common(5):
         stats.issues.append(
             Issue(kind="junk_file", count=count, note=f"system file {name}")
@@ -258,6 +273,19 @@ def scan(
         )
     deep["bandwidth_bps"] = source.probe_bandwidth(images) if deep["sampled"] else 0.0
     return stats, images, deep
+
+
+def catalog_candidate(ref: FileRef) -> CatalogCandidate:
+    minimum = MIN_CATALOG_BYTES.get(ref.ext, MIN_TEXT_CATALOG_BYTES)
+    if ref.size == 0:
+        note = "The file is empty."
+    elif ref.size < minimum:
+        note = f"Only {ref.size} bytes, too small to hold any real content."
+    else:
+        note = "May describe the images. It is not used yet."
+    return CatalogCandidate(
+        key=ref.key, size=ref.size, looks_empty=ref.size < minimum, note=note
+    )
 
 
 def sample_images(source: Source, images: list[FileRef], count: int) -> dict:

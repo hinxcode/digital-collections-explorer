@@ -63,6 +63,13 @@ class Issue(BaseModel):
     examples: list[str] = Field(default_factory=list)
 
 
+class CatalogCandidate(BaseModel):
+    key: str
+    size: int
+    looks_empty: bool
+    note: str = ""
+
+
 class ScanStats(BaseModel):
     total_files: int = 0
     image_files: int = 0
@@ -75,6 +82,7 @@ class ScanStats(BaseModel):
     dimensions: dict[str, Any] = Field(default_factory=dict)
     sampled: int = 0
     issues: list[Issue] = Field(default_factory=list)
+    catalog_candidates: list[CatalogCandidate] = Field(default_factory=list)
 
 
 class NamePattern(BaseModel):

@@ -88,3 +88,13 @@ def test_gps_block_without_coordinates_is_not_a_location(tmp_path):
         image.save(tmp_path / f"scan_{index}.jpg", exif=exif.tobytes())
     result = profile_collection(LocalDirSource(str(tmp_path)), "gps", progress=False)
     assert not result.field("location").available
+
+
+def test_empty_catalog_files_are_pointed_out(tmp_path):
+    Image.new("RGB", (64, 64)).save(tmp_path / "photo.jpg")
+    (tmp_path / "inventory.xlsx").write_bytes(b"PK\x03\x04")
+    (tmp_path / "records.csv").write_text("id,title\n" + "1,A long enough title\n" * 10)
+    result = profile_collection(LocalDirSource(str(tmp_path)), "cat", progress=False)
+    found = {c.key: c.looks_empty for c in result.scan.catalog_candidates}
+    assert found == {"inventory.xlsx": True, "records.csv": False}
+    assert "inventory.xlsx" in render(result)

@@ -62,6 +62,14 @@ def problem_lines(p: CollectionProfile) -> list[str]:
             "  WARNING: the image files could not be read, so estimates are incomplete.",
         ]
         lines += [f"      {issue.note}" for issue in blocked]
+    if scan.catalog_candidates:
+        lines += ["", "  Files that may be a catalog of these images:"]
+        for candidate in scan.catalog_candidates:
+            flag = "WARNING: " if candidate.looks_empty else ""
+            lines.append(
+                f"      {candidate.key} ({human_bytes(candidate.size)}). "
+                f"{flag}{candidate.note}"
+            )
     listed = [i for i in scan.issues if i.kind != "unfetchable"]
     if listed:
         lines += ["", "  Things to be aware of:"]
