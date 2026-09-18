@@ -6,10 +6,14 @@ from pathlib import Path
 import numpy as np
 import torch
 
+from src.backend.services.index_info import write_index_info
+
 from .state import IngestState
 
 
-def export_for_backend(state: IngestState, embeddings_dir: Path) -> int:
+def export_for_backend(
+    state: IngestState, embeddings_dir: Path, model_type: str, model_name: str
+) -> int:
     item_ids, vectors, metadata = [], [], {}
     for item_id, embedding, item_metadata in state.done_rows():
         item_ids.append(item_id)
@@ -23,4 +27,7 @@ def export_for_backend(state: IngestState, embeddings_dir: Path) -> int:
     torch.save(item_ids, embeddings_dir / "item_ids.pt")
     with open(embeddings_dir / "metadata.json", "w") as handle:
         json.dump(metadata, handle, indent=2, default=str)
+    write_index_info(
+        embeddings_dir, model_type, model_name, len(vectors[0]), len(item_ids)
+    )
     return len(item_ids)

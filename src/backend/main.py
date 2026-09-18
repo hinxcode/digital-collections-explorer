@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from .api.routes import embeddings, images, search
 from .core.config import settings
 from .services.embedding_service import embedding_service
+from .services.index_info import describe_mismatch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -20,11 +21,28 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def index_problem():
+    """Return why the loaded index cannot be searched with the configured model"""
+    embedding_service.load_embeddings()
+    if not embedding_service.is_loaded:
+        return None
+    model_dimensions = search.model_service.encode_text(["dimension check"]).shape[-1]
+    return describe_mismatch(
+        embedding_service.embeddings_dir,
+        embedding_service.embeddings.shape[1],
+        settings.model_name,
+        model_dimensions,
+    )
+
+
 @asynccontextmanager
 async def lifespan(app):
     logger.info("Initializing services...")
 
-    embedding_service.load_embeddings()
+    problem = index_problem()
+    if problem:
+        logger.error(problem)
+        raise RuntimeError(problem)
 
     logger.info(f"Starting API server on {settings.host}:{settings.port}")
     logger.info(f"Debug mode: {settings.debug}")
@@ -93,6 +111,11 @@ if __name__ == "__main__":
             f"Leave it running and choose another port, for example:\n"
             f"  DCE_PORT={settings.port + 1} python -m src.backend.main"
         )
+        sys.exit(1)
+
+    problem = index_problem()
+    if problem:
+        print(problem)
         sys.exit(1)
 
     uvicorn.run(

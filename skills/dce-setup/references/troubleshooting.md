@@ -6,6 +6,17 @@
 Someone built that index another way. Use a different `--data-dir`. Only pass
 `--overwrite` when the person has explicitly said to replace that index.
 
+## "was built with ..., but config.json is set to ..."
+
+An index can only be searched, or added to, with the model that built it. This
+appears when `config.json` names a different model from the one the collection
+was indexed with, for example after the project's default model changed.
+
+Do not edit the index. Either point `config.json` back at the model named in the
+message, or index the collection again into a new `--data-dir` with the current
+model. Re-indexing needs the source images again, so say how long it will take
+before starting.
+
 ## The report says image files could not be read
 
 The manifest's URL column does not return image data. Open one URL to confirm:

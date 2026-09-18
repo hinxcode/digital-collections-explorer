@@ -69,7 +69,14 @@ def test_output_matches_what_the_backend_loads(collection):
     data_dir = tempfile.mkdtemp(prefix="dce_ingest_out_")
     state, _, _, _ = ingest(collection, data_dir)
     embeddings_dir = Path(data_dir) / "embeddings"
-    assert export_for_backend(state, embeddings_dir) == 3
+    assert export_for_backend(state, embeddings_dir, "clip", "test-model") == 3
+    info = json.loads((embeddings_dir / "index_info.json").read_text())
+    assert info == {
+        "model_type": "clip",
+        "model_name": "test-model",
+        "dimensions": VECTOR_SIZE,
+        "items": 3,
+    }
 
     embeddings = torch.load(embeddings_dir / "embeddings.pt")
     item_ids = torch.load(embeddings_dir / "item_ids.pt")

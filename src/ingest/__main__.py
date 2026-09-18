@@ -10,6 +10,7 @@ import torch
 
 from src.backend.core.config import DeviceType, apply_data_dir, settings
 from src.backend.services.embedding_service_factory import create_embedding_service
+from src.backend.services.index_info import KNOWN_DIMENSIONS
 from src.profiling.sources import open_source
 
 from .export import export_for_backend
@@ -164,6 +165,21 @@ def main() -> int:
         )
         return 2
 
+    state = IngestState(str(embeddings_dir / STATE_FILE), COMMIT_EVERY)
+    indexed_with = state.fact("model_name") or KNOWN_DIMENSIONS.get(
+        state.stored_dimensions()
+    )
+    if indexed_with and indexed_with != settings.model_name:
+        print(
+            f"This collection was indexed with {indexed_with}, but config.json is now "
+            f"set to {settings.model_name}.\nResults from two models cannot be mixed. "
+            f"Either set config.json back to {indexed_with}, or index into a new "
+            f"folder with --data-dir."
+        )
+        state.close()
+        return 2
+    state.remember("model_name", settings.model_name)
+
     print(f"Listing images in {args.uri} ...")
     source = open_source(args.uri, anonymous=args.anonymous, fetch_via=args.fetch_via)
     refs = sorted(
@@ -174,9 +190,9 @@ def main() -> int:
         refs = refs[: args.limit]
     if not refs:
         print("No images found.")
+        state.close()
         return 1
 
-    state = IngestState(str(embeddings_dir / STATE_FILE), COMMIT_EVERY)
     ids = [make_item_id(ref.key) for ref in refs]
     state.seed([(item_id, ref.key, ref.size) for item_id, ref in zip(ids, refs)])
     finished = state.finished_ids(ids, args.retry_failed)
@@ -225,7 +241,9 @@ def main() -> int:
         for status, error, count in state.problems():
             print(f"  {status:<8} {count:>6,}  {error}")
 
-    exported = export_for_backend(state, embeddings_dir)
+    exported = export_for_backend(
+        state, embeddings_dir, settings.model_type.value, settings.model_name
+    )
     print(f"Wrote {exported:,} embeddings to {embeddings_dir}")
     used = measured_disk_bytes(embeddings_dir)["total"]
     print(f"Disk used by this collection: {used / 1024**2:,.1f} MB (measured)")

@@ -22,10 +22,16 @@ CREATE TABLE IF NOT EXISTS items (
     updated_at  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_items_status ON items(status);
+CREATE TABLE IF NOT EXISTS facts (
+    name   TEXT PRIMARY KEY,
+    value  TEXT
+);
 """
 
 # Commit at least this often so that --status shows fresh progress.
 COMMIT_INTERVAL_SECONDS = 5
+
+FLOAT32_BYTES = 4
 
 # SQLite allows at most 999 bound parameters per statement by default.
 SQL_PARAMETER_CHUNK = 900
@@ -51,6 +57,22 @@ class IngestState:
         self.con = sqlite3.connect(path, check_same_thread=False)
         self.con.executescript(SCHEMA)
         self.con.commit()
+
+    def fact(self, name: str) -> str | None:
+        row = self.con.execute(
+            "SELECT value FROM facts WHERE name=?", (name,)
+        ).fetchone()
+        return row[0] if row else None
+
+    def remember(self, name: str, value: str) -> None:
+        self.con.execute("INSERT OR REPLACE INTO facts VALUES (?, ?)", (name, value))
+        self.con.commit()
+
+    def stored_dimensions(self) -> int | None:
+        row = self.con.execute(
+            "SELECT length(embedding) FROM items WHERE embedding IS NOT NULL LIMIT 1"
+        ).fetchone()
+        return row[0] // FLOAT32_BYTES if row else None
 
     def seed(self, items: list[tuple[str, str, int]]) -> None:
         self.con.executemany(
