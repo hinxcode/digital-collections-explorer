@@ -77,3 +77,14 @@ def test_sizing_is_never_empty(profile):
 
 def test_report_is_plain_ascii_english(profile):
     assert render(profile).isascii()
+
+
+def test_gps_block_without_coordinates_is_not_a_location(tmp_path):
+    exif_gps_pointer = 34853
+    for index in range(4):
+        image = Image.new("RGB", (640, 480))
+        exif = image.getexif()
+        exif[exif_gps_pointer] = {}
+        image.save(tmp_path / f"scan_{index}.jpg", exif=exif.tobytes())
+    result = profile_collection(LocalDirSource(str(tmp_path)), "gps", progress=False)
+    assert not result.field("location").available

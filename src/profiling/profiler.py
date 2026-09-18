@@ -35,6 +35,8 @@ HEAD_BYTES = 128 * 1024
 EXIF_DATETIME_ORIGINAL = 36867
 EXIF_DATETIME = 306
 EXIF_GPS = 34853
+GPS_LATITUDE = 2
+GPS_LONGITUDE = 4
 
 # Measured on Smithsonian images written by src/ingest: a 400 px thumbnail
 # (22 KB) plus a 1920 px processed copy (597 KB), and 5.7 KB of state and metadata.
@@ -292,7 +294,11 @@ def sample_images(source: Source, images: list[FileRef], count: int) -> dict:
         taken = exif.get(EXIF_DATETIME_ORIGINAL) or exif.get(EXIF_DATETIME)
         if taken:
             result["exif_dates"].append(str(taken))
-        if exif.get(EXIF_GPS):
+        try:
+            gps = exif.get_ifd(EXIF_GPS)
+        except Exception:
+            gps = {}
+        if GPS_LATITUDE in gps and GPS_LONGITUDE in gps:
             result["exif_gps"] += 1
     if widths:
         width, height = percentiles(widths), percentiles(heights)
@@ -462,8 +468,9 @@ def file_derived_fields(
                 coverage=round(len(dates) / sampled, 3),
                 facetable=True,
                 sample_values=dates[:3],
-                note=f"Read from EXIF in {deep['sampled']} sampled images{span}. "
-                f"This is not an authoritative catalog date.",
+                note=f"When each picture was taken, read from EXIF in "
+                f"{deep['sampled']} sampled images{span}. For scanned or photographed "
+                f"objects this is the digitisation date, not the date of the object.",
             )
         )
     else:
@@ -479,7 +486,7 @@ def file_derived_fields(
             )
         )
 
-    if deep["exif_gps"]:
+    if deep["exif_gps"] / sampled > MIN_EXIF_COVERAGE:
         fields.append(
             FieldProfile(
                 name="location",
@@ -487,7 +494,8 @@ def file_derived_fields(
                 provenance=Provenance.FILE_DERIVED,
                 coverage=round(deep["exif_gps"] / sampled, 3),
                 facetable=True,
-                note="Read from EXIF GPS.",
+                note="Where each picture was taken, read from EXIF GPS. For scanned "
+                "or photographed objects this is the studio, not the object's origin.",
             )
         )
     else:
