@@ -116,3 +116,6 @@ settings = load_config()
 
 if os.environ.get("DCE_DATA_DIR"):
     apply_data_dir(settings, os.environ["DCE_DATA_DIR"])
+
+if os.environ.get("DCE_PORT"):
+    settings.port = int(os.environ["DCE_PORT"])

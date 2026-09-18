@@ -1,4 +1,6 @@
 import logging
+import socket
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -59,8 +61,20 @@ app.include_router(embeddings.router)
 
 @app.get("/api/health")
 async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy"}
+    """Health check endpoint, also identifies which collection is being served"""
+    return {
+        "status": "healthy",
+        "collection": Path(settings.data_dir).name if settings.data_dir else None,
+        "items": embedding_service.get_embedding_count(),
+        "embeddings_dir": settings.embeddings_dir,
+    }
+
+
+def port_in_use(port: int) -> bool:
+    """Check whether something is already listening on the port"""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.settimeout(1)
+        return probe.connect_ex(("127.0.0.1", port)) == 0
 
 
 frontend_dir = Path(f"src/frontend/{settings.collection_type}/dist")
@@ -73,6 +87,14 @@ else:
     logger.warning("The API will run without serving the frontend.")
 
 if __name__ == "__main__":
+    if port_in_use(settings.port):
+        print(
+            f"Port {settings.port} is already in use, possibly by another collection.\n"
+            f"Leave it running and choose another port, for example:\n"
+            f"  DCE_PORT={settings.port + 1} python -m src.backend.main"
+        )
+        sys.exit(1)
+
     uvicorn.run(
         "src.backend.main:app",
         host=settings.host,

@@ -55,7 +55,7 @@ EXPOSE 8000
 
 # Loading the model and the index takes a while before the first health check passes.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"
+    CMD python -c "import os, urllib.request; urllib.request.urlopen('http://localhost:' + os.environ.get('DCE_PORT', '8000') + '/api/health')"
 
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
 CMD ["serve"]
