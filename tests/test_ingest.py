@@ -184,3 +184,20 @@ def test_server_resolves_relative_paths_against_its_own_data_folder(tmp_path):
         assert resolve_path("/absolute/x.jpg") == Path("/absolute/x.jpg")
     finally:
         settings.data_dir = previous
+
+
+def test_summary_reports_measured_disk_use(tmp_path, monkeypatch):
+    from src.backend.core.config import apply_data_dir, settings
+    from src.ingest.__main__ import measured_disk_bytes
+
+    for name in ("embeddings_dir", "thumbnails_dir", "processed_data_dir", "data_dir"):
+        monkeypatch.setattr(settings, name, getattr(settings, name))
+    apply_data_dir(settings, str(tmp_path))
+    (tmp_path / "embeddings").mkdir()
+    (tmp_path / "thumbnails").mkdir()
+    (tmp_path / "embeddings" / "embeddings.pt").write_bytes(b"x" * 100)
+    (tmp_path / "thumbnails" / "a.jpg").write_bytes(b"x" * 40)
+
+    sizes = measured_disk_bytes(tmp_path / "embeddings")
+
+    assert sizes == {"index": 100, "thumbnails": 40, "total": 140}

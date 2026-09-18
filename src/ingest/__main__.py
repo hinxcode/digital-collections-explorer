@@ -96,6 +96,23 @@ def serve_command(data_dir: str | None) -> str:
     return f"{prefix}python -m src.backend.main"
 
 
+def folder_bytes(folder: Path) -> int:
+    return sum(f.stat().st_size for f in folder.rglob("*") if f.is_file())
+
+
+def measured_disk_bytes(embeddings_dir: Path) -> dict:
+    folders = {
+        "index": embeddings_dir,
+        "thumbnails": Path(settings.thumbnails_dir),
+        "processed": Path(settings.processed_data_dir),
+    }
+    sizes = {
+        name: folder_bytes(path) for name, path in folders.items() if path.exists()
+    }
+    sizes["total"] = sum(sizes.values())
+    return sizes
+
+
 def summary(state: IngestState, embeddings_dir: Path, data_dir: str | None) -> dict:
     counts = state.counts()
     return {
@@ -104,6 +121,7 @@ def summary(state: IngestState, embeddings_dir: Path, data_dir: str | None) -> d
         "pending": counts.get("pending", 0),
         "skipped": counts.get("skipped", 0),
         "failed": counts.get("failed", 0),
+        "disk_bytes_measured": measured_disk_bytes(embeddings_dir),
         "problems": [
             {"status": status, "reason": reason, "count": count}
             for status, reason, count in state.problems()
@@ -209,6 +227,8 @@ def main() -> int:
 
     exported = export_for_backend(state, embeddings_dir)
     print(f"Wrote {exported:,} embeddings to {embeddings_dir}")
+    used = measured_disk_bytes(embeddings_dir)["total"]
+    print(f"Disk used by this collection: {used / 1024**2:,.1f} MB (measured)")
     print(f"Start the search server with: {serve_command(args.data_dir)}")
     if args.json_path:
         with open(args.json_path, "w") as handle:
