@@ -181,6 +181,7 @@ def main() -> int:
         options = Options(
             thumbnails_dir=Path(settings.thumbnails_dir),
             processed_dir=Path(settings.processed_data_dir),
+            data_dir=Path(settings.data_dir) if settings.data_dir else None,
             download_workers=args.download_workers,
             decode_workers=args.decode_workers,
             batch_size=args.batch_size,

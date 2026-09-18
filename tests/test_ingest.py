@@ -147,3 +147,40 @@ def test_catalog_title_is_shown_by_the_existing_frontend(collection):
     ((_, _, metadata),) = state.done_rows()
     assert metadata["title"] == "A test title"
     assert metadata["catalog"]["record_id"] == "rec_1"
+
+
+def test_paths_are_stored_relative_to_the_collection_folder(collection):
+    data_dir = Path(tempfile.mkdtemp(prefix="dce_ingest_out_"))
+    source = LocalDirSource(collection)
+    refs = [r for r in source.iter_files() if r.key == "a/photo.jpg"]
+    state = IngestState(str(data_dir / "embeddings" / "state.sqlite"), 1)
+    state.seed([(make_item_id(r.key), r.key, r.size) for r in refs])
+    options = Options(
+        thumbnails_dir=data_dir / "thumbnails",
+        processed_dir=data_dir / "processed",
+        data_dir=data_dir,
+        download_workers=1,
+        decode_workers=1,
+        batch_size=1,
+    )
+    run(source, refs, FakeService(), state, options)
+    ((_, _, metadata),) = state.done_rows()
+    for kind in ("processed", "thumbnail"):
+        stored = metadata["paths"][kind]
+        assert not os.path.isabs(stored)
+        assert (data_dir / stored).exists()
+
+
+def test_server_resolves_relative_paths_against_its_own_data_folder(tmp_path):
+    from src.backend.api.routes.images import resolve_path
+    from src.backend.core.config import settings
+
+    (tmp_path / "thumbnails").mkdir()
+    (tmp_path / "thumbnails" / "x.jpg").write_bytes(b"jpg")
+    previous = settings.data_dir
+    settings.data_dir = str(tmp_path)
+    try:
+        assert resolve_path("thumbnails/x.jpg") == tmp_path / "thumbnails" / "x.jpg"
+        assert resolve_path("/absolute/x.jpg") == Path("/absolute/x.jpg")
+    finally:
+        settings.data_dir = previous

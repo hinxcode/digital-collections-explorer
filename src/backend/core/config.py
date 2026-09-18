@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     embeddings_dir: str = "data/embeddings"
     thumbnails_dir: str = "data/thumbnails"
 
+    # Root folder of one collection. Image paths in its index are stored relative
+    # to it, so an index built on one machine can be served from another.
+    data_dir: str | None = None
+
 
 def load_config():
     """Load configuration from JSON file"""
@@ -102,6 +106,7 @@ def load_config():
 def apply_data_dir(target: Settings, data_dir: str) -> None:
     """Keep one collection's embeddings, thumbnails and processed images together"""
     root = Path(data_dir)
+    target.data_dir = str(root)
     target.embeddings_dir = str(root / "embeddings")
     target.thumbnails_dir = str(root / "thumbnails")
     target.processed_data_dir = str(root / "processed")

@@ -46,6 +46,7 @@ SHARD_PREFIX_LENGTH = 2
 class Options:
     thumbnails_dir: Path
     processed_dir: Path
+    data_dir: Path | None = None
     download_workers: int = 16
     decode_workers: int = 4
     batch_size: int = 32
@@ -107,6 +108,10 @@ def make_item_id(key: str) -> str:
 def sharded_path(root: Path, key: str) -> Path:
     digest = hashlib.sha1(key.encode("utf-8")).hexdigest()
     return root / digest[:SHARD_PREFIX_LENGTH] / f"{digest}.jpg"
+
+
+def stored_path(path: Path, data_dir: Path | None) -> str:
+    return str(path.relative_to(data_dir)) if data_dir else str(path)
 
 
 def elapsed_ms(item: Item) -> int:
@@ -190,10 +195,12 @@ def decode_worker(
                 "source_uri": original,
                 "paths": {
                     "original": (
-                        original if os.path.exists(original) else str(processed_path)
+                        original
+                        if os.path.exists(original)
+                        else stored_path(processed_path, options.data_dir)
                     ),
-                    "processed": str(processed_path),
-                    "thumbnail": str(thumbnail_path),
+                    "processed": stored_path(processed_path, options.data_dir),
+                    "thumbnail": stored_path(thumbnail_path, options.data_dir),
                 },
             }
             catalog = item.ref.extra.get("row")
