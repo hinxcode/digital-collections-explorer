@@ -39,7 +39,15 @@ machine cannot find out.
    machine guess. When you describe a field, say which. Never present a machine
    guess as catalog fact.
 7. **Use plain language.** Say "analysing the images", not "computing
-   embeddings". Say "memory", not "RAM". Give times and sizes in human units.
+   embeddings". Say "memory", not "RAM". Give times and sizes in human units
+   (minutes, MB), never bytes or milliseconds. Never show the person internal
+   names or raw output: no field names such as `capture_date`, no "EXIF" (say
+   "the date stored inside each photo file"), no process ids, no JSON, and no
+   raw error messages. Translate an error into what happened and what it means
+   for them, for example "2 files are damaged and could not be opened".
+8. **Report measurements, not guesses.** Numbers in the profile's `sizing` are
+   estimates made before indexing. After indexing, report only measured values
+   from the ingest summary. If you must quote an estimate, call it an estimate.
 
 ## Python
 
@@ -96,7 +104,10 @@ than files. Ask where the actual files are stored, then rerun with
 Summarise the report in a few short paragraphs, in this order:
 
 1. What is there: how many images, how large, and anything surprising such as
-   images with no catalog record, non-image files, or damaged files.
+   images with no catalog record, non-image files, or damaged files. If the
+   report lists files that may be a catalog (spreadsheets, CSV), mention them.
+   Say plainly when one looks empty. Say honestly that a catalog file is not
+   used yet, so the person does not expect its contents to appear in the site.
 2. What they will be able to do: search by description, search by example
    image, and each available filter with where it comes from.
 3. What they will not be able to do, with the reason for each, and what it
@@ -118,9 +129,16 @@ their images have no catalog record matters more than the file count.
 ## Step 4. Ask the decisions
 
 The profile's `decisions` list holds the questions, each with `options`, a
-`recommended` answer, and `why`. Ask them together, in plain language, showing
-the recommendation and the reason. If your environment has a structured
-question tool, use it. Accept "whatever you recommend" as an answer.
+`recommended` answer, and `why`.
+
+- **Small local job** (the estimate is under five minutes, the source is on this
+  machine, and nothing costs money): go ahead with the recommended answers, then
+  tell the person what you chose and why, so they can object. Skip the question
+  about storing data in the cloud, since nothing leaves their machine.
+- **Anything larger, remote, or costing money:** ask first. Ask the questions
+  together, in plain language, showing the recommendation and the reason. If
+  your environment has a structured question tool, use it. Accept "whatever you
+  recommend" as an answer.
 
 Add one question of your own when it applies: if indexing will take more than
 an hour, ask whether to index a small sample first (a few hundred images) so
@@ -147,20 +165,33 @@ Add `--limit N` for a sample run.
 
 ## Step 6. Start the site
 
-The summary's `serve_command` is the exact command to run:
+The summary's `serve_command` is the command to run. Port 8000 is the default.
+If the server reports that the port is already in use, another collection is
+probably being served there. Leave it running and pick the next free port with
+`DCE_PORT`. Never stop a server you did not start without asking.
 
 ```bash
-DCE_DATA_DIR=data/collections/NAME $PY -m src.backend.main
+DCE_DATA_DIR=data/collections/NAME DCE_PORT=8000 $PY -m src.backend.main
 ```
 
-Run it in the background, wait for `GET /api/health` to return healthy, then
-confirm search works before telling the person it is ready:
+Run it in the background, then check that the site is up **and that it is
+serving this collection**, not someone else's server on the same port:
+
+```bash
+curl -s http://localhost:8000/api/health
+```
+
+`collection` must equal `NAME`, and `items` must equal `indexed` from the ingest
+summary. Then confirm search works before telling the person it is ready:
 
 ```bash
 curl -s "http://localhost:8000/api/search/text?query=a%20portrait&limit=3"
 ```
 
-Give them the address (`http://localhost:8000`) and two or three example
+In your closing message, take the disk space from `disk_bytes_measured` in the
+ingest summary, not from the earlier estimate.
+
+Give them the address (for example `http://localhost:8000`) and two or three example
 searches suited to their collection. Suggest describing what a picture looks
 like rather than typing catalog terms, since the search reads the images
 themselves.

@@ -40,9 +40,10 @@ that was given to `--data-dir`. Without it the server reads the folders named in
 
 ## Port 8000 is already in use
 
-Another copy of the server is probably running. Find it with
-`lsof -i :8000` and ask before stopping it, since it may be serving another
-collection.
+The server refuses to start and suggests another port. Another collection is
+probably being served there: `curl -s http://localhost:8000/api/health` shows
+which one. Leave it running and start this collection with `DCE_PORT=8001` (or
+the next free port). Only stop the other server if the person asks you to.
 
 ## `ModuleNotFoundError` for boto3 or duckdb
 
