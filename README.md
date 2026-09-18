@@ -147,7 +147,26 @@ Build options:
 
 Configure the model in `config.json`:
 
-### Using CLIP (default)
+### Using SigLIP (default)
+
+[SigLIP](https://arxiv.org/abs/2303.15343) is an open-source multimodal embedding model created by Google DeepMind.
+
+```json
+{
+  "model_config": {
+    "model_type": "siglip",
+    "model_name": "google/siglip-base-patch16-224",
+    "device": "mps"
+  }
+}
+```
+
+In our tests on a museum collection it found clearly better matches than CLIP for
+English queries, and it stays usable for queries in other languages, where CLIP mostly
+fails. Search works best in English. It indexes about three times slower than CLIP and
+its index is about 1.5 times larger.
+
+### Using CLIP
 
 ```json
 {
@@ -159,19 +178,11 @@ Configure the model in `config.json`:
 }
 ```
 
-### Using SigLIP
+### Changing the model
 
-This project also supports [SigLIP](https://arxiv.org/abs/2303.15343) which is an open-source multimodal embedding model created by Google DeepMind.
-
-```json
-{
-  "model_config": {
-    "model_type": "siglip",
-    "model_name": "google/siglip-base-patch16-224",
-    "device": "mps"
-  }
-}
-```
+An index can only be searched with the model that built it. The server checks this
+when it starts and explains what to do if they differ. After changing the model,
+build a new index.
 
 **Device options:**
 

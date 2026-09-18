@@ -25,3 +25,32 @@ def test_older_index_without_info_is_checked_by_vector_width(tmp_path):
     assert describe_mismatch(tmp_path, 512, CLIP, 512) is None
     problem = describe_mismatch(tmp_path, 512, SIGLIP, 768)
     assert CLIP in problem
+
+
+def write_config(tmp_path, model_config):
+    import json
+
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps({"model_config": model_config}))
+    return path
+
+
+def test_default_model_type_and_name_agree(tmp_path):
+    from src.backend.core.config import load_config
+
+    loaded = load_config(write_config(tmp_path, {}))
+    assert (loaded.model_type.value, loaded.model_name) == ("siglip", SIGLIP)
+
+
+def test_config_that_only_names_a_legacy_clip_model_stays_on_clip(tmp_path):
+    from src.backend.core.config import load_config
+
+    loaded = load_config(write_config(tmp_path, {"clip_model": CLIP}))
+    assert (loaded.model_type.value, loaded.model_name) == ("clip", CLIP)
+
+
+def test_choosing_clip_without_a_name_gets_the_clip_default(tmp_path):
+    from src.backend.core.config import load_config
+
+    loaded = load_config(write_config(tmp_path, {"model_type": "clip"}))
+    assert loaded.model_name == CLIP

@@ -48,9 +48,14 @@ DB_BYTES_PER_ITEM = 5_700
 VECTOR_DIMS = {"clip": 512, "siglip": 768, "imagebind": 1024}
 FLOAT32_BYTES = 4
 
-# Images per second for one model at batch 32. mps and cpu were measured on an
-# Apple M4; cuda was not measured and is a conservative figure.
-ENCODE_RATE = {"cuda": 300.0, "mps": 168.0, "cpu": 87.0}
+# Images per second at batch 32. mps and cpu were measured on an Apple M4;
+# cuda was not measured and is a conservative figure. ImageBind was not measured
+# and borrows the slower SigLIP figures.
+ENCODE_RATE = {
+    "clip": {"cuda": 300.0, "mps": 168.0, "cpu": 87.0},
+    "siglip": {"cuda": 100.0, "mps": 54.0, "cpu": 22.0},
+}
+ENCODE_RATE["imagebind"] = ENCODE_RATE["siglip"]
 
 # JPEG decoding with PIL draft mode, measured on an Apple M4, spread over the
 # ingest pipeline's 4 decode workers.
@@ -623,7 +628,8 @@ def estimate_sizing(stats: ScanStats, bandwidth_bps: float, model_type: str) -> 
     device = detect_device()
     megapixels = stats.dimensions.get("megapixels_p50", 0)
     decode = count * megapixels * DECODE_SECONDS_PER_MEGAPIXEL / DECODE_WORKERS
-    compute = count / ENCODE_RATE[device] + decode
+    rates = ENCODE_RATE.get(model_type, ENCODE_RATE["siglip"])
+    compute = count / rates[device] + decode
     seconds = {
         "compute": round(compute, 1),
         "in_region_aws": round(
@@ -700,7 +706,7 @@ def profile_collection(
     sample: int = 300,
     max_files: int | None = None,
     progress: bool = True,
-    model_type: str = "clip",
+    model_type: str = "siglip",
 ) -> CollectionProfile:
     stats, images, deep = scan(source, sample, max_files, progress)
     signals = directory_signals(images)
