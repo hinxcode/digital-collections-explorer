@@ -8,6 +8,8 @@ services:
     image: digital-collections-explorer
     build: .
     command: ["serve"]
+    environment:
+      DCE_COLLECTION: ${COLLECTION:-demo}
     ports:
       - "${PORT:-8000}:8000"
     volumes:

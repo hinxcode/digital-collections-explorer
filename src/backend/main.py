@@ -1,4 +1,5 @@
 import logging
+import os
 import socket
 import sys
 from contextlib import asynccontextmanager
@@ -82,10 +83,18 @@ async def health_check():
     """Health check endpoint, also identifies which collection is being served"""
     return {
         "status": "healthy",
-        "collection": Path(settings.data_dir).name if settings.data_dir else None,
+        "collection": collection_name(),
         "items": embedding_service.get_embedding_count(),
         "embeddings_dir": settings.embeddings_dir,
     }
+
+
+def collection_name():
+    """Name of the collection being served. A container mounts every collection at
+    the same path, so there the name has to be given with DCE_COLLECTION."""
+    if os.environ.get("DCE_COLLECTION"):
+        return os.environ["DCE_COLLECTION"]
+    return Path(settings.data_dir).name if settings.data_dir else None
 
 
 def port_in_use(port: int) -> bool:

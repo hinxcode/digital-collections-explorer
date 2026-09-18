@@ -34,3 +34,9 @@ def test_port_check_detects_a_listening_server(backend):
         busy_port = server.getsockname()[1]
         assert backend.port_in_use(busy_port)
     assert not backend.port_in_use(busy_port)
+
+
+def test_container_can_name_the_collection_it_serves(backend, monkeypatch):
+    monkeypatch.setattr(backend.settings, "data_dir", "/data")
+    monkeypatch.setenv("DCE_COLLECTION", "maps-of-ohio")
+    assert backend.collection_name() == "maps-of-ohio"
