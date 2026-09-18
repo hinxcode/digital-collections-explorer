@@ -85,6 +85,64 @@ python -m src.backend.main
 
 The API server will start at http://localhost:8000
 
+## Large, Remote, or Unsorted Collections
+
+The steps above expect your images in `data/raw`. When a collection is too large for
+your disk, lives in an S3 bucket, or has never been organised, use the tools below
+instead. They need no metadata and never store the original images.
+
+```bash
+# 1. See what the collection contains, what is possible, and what indexing will cost
+python -m src.profiling /path/to/images
+python -m src.profiling s3://bucket/prefix --anonymous
+python -m src.profiling manifest.parquet --fetch-via s3://bucket
+
+# 2. Build the index. Safe to stop and rerun; it continues where it left off.
+python -m src.ingest /path/to/images --data-dir data/collections/my-collection
+
+# 3. Serve that collection
+DCE_DATA_DIR=data/collections/my-collection python -m src.backend.main
+```
+
+If you use an AI coding agent that supports [Agent Skills](https://agentskills.io)
+(Claude Code, Codex, Gemini CLI, Cursor, and others), the `dce-setup` skill in
+`skills/` walks through these steps for you. Ask it to make your collection searchable.
+
+## Running with Docker
+
+Building the index is a one-off job. Serving searches is a long-running service that
+does not need a GPU. The image supports both, so they can run on different machines.
+
+```bash
+docker build -t digital-collections-explorer .
+
+# Build the index once. The collection folder keeps the index, thumbnails and state.
+docker run --rm \
+  -v "$PWD/data/collections/my-collection:/data" \
+  -v /path/to/images:/source:ro \
+  digital-collections-explorer ingest /source
+
+# Serve it
+docker run -p 8000:8000 \
+  -v "$PWD/data/collections/my-collection:/data" \
+  digital-collections-explorer
+```
+
+The same two steps with Docker Compose:
+
+```bash
+SOURCE_DIR=/path/to/images COLLECTION=my-collection docker compose run --rm ingest
+COLLECTION=my-collection docker compose up serve
+```
+
+Build options:
+
+- `--build-arg COLLECTION_TYPE=maps` selects the frontend (`photographs`, `maps`, `documents`).
+- `--build-arg TORCH_VARIANT=cu124` installs the CUDA build of PyTorch for indexing on a
+  GPU. The default is the much smaller CPU build, which is all that serving needs.
+- `--build-arg PRELOAD_MODEL=false` leaves the model out of the image. It is then
+  downloaded each time a container starts.
+
 ## Model Configuration
 
 Configure the model in `config.json`:
