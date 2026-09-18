@@ -47,6 +47,7 @@ data/raw/*
 data/processed/*
 data/embeddings/*
 data/thumbnails/*
+data/collections/
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/embeddings/.gitkeep

@@ -117,3 +117,33 @@ def test_byte_budget_admits_one_oversized_request():
     assert budget.acquire(500) == 100
     budget.release(100)
     assert budget.used == 0
+
+
+def test_data_dir_keeps_one_collection_together():
+    from src.backend.core.config import Settings, apply_data_dir
+
+    target = Settings()
+    apply_data_dir(target, "data/collections/demo")
+    assert target.embeddings_dir == "data/collections/demo/embeddings"
+    assert target.thumbnails_dir == "data/collections/demo/thumbnails"
+    assert target.processed_data_dir == "data/collections/demo/processed"
+
+
+def test_catalog_title_is_shown_by_the_existing_frontend(collection):
+    data_dir = tempfile.mkdtemp(prefix="dce_ingest_out_")
+    source = LocalDirSource(collection)
+    refs = [r for r in source.iter_files() if r.key == "a/photo.jpg"]
+    refs[0].extra["row"] = {"title": "A test title", "record_id": "rec_1"}
+    state = IngestState(str(Path(data_dir) / "embeddings" / "state.sqlite"), 1)
+    state.seed([(make_item_id(r.key), r.key, r.size) for r in refs])
+    options = Options(
+        thumbnails_dir=Path(data_dir) / "thumbnails",
+        processed_dir=Path(data_dir) / "processed",
+        download_workers=1,
+        decode_workers=1,
+        batch_size=1,
+    )
+    run(source, refs, FakeService(), state, options)
+    ((_, _, metadata),) = state.done_rows()
+    assert metadata["title"] == "A test title"
+    assert metadata["catalog"]["record_id"] == "rec_1"

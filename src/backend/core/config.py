@@ -1,4 +1,5 @@
 import json
+import os
 from enum import Enum
 from pathlib import Path
 
@@ -98,4 +99,15 @@ def load_config():
     return Settings()
 
 
+def apply_data_dir(target: Settings, data_dir: str) -> None:
+    """Keep one collection's embeddings, thumbnails and processed images together"""
+    root = Path(data_dir)
+    target.embeddings_dir = str(root / "embeddings")
+    target.thumbnails_dir = str(root / "thumbnails")
+    target.processed_data_dir = str(root / "processed")
+
+
 settings = load_config()
+
+if os.environ.get("DCE_DATA_DIR"):
+    apply_data_dir(settings, os.environ["DCE_DATA_DIR"])

@@ -196,8 +196,14 @@ def decode_worker(
                     "thumbnail": str(thumbnail_path),
                 },
             }
-            if "row" in item.ref.extra:
-                item.metadata["catalog"] = item.ref.extra["row"]
+            catalog = item.ref.extra.get("row")
+            if catalog:
+                item.metadata["catalog"] = catalog
+                for shown_by_frontend in ("title", "description"):
+                    if catalog.get(shown_by_frontend):
+                        item.metadata[shown_by_frontend] = str(
+                            catalog[shown_by_frontend]
+                        )
             image.thumbnail(
                 (MODEL_INPUT_EDGE, MODEL_INPUT_EDGE), Image.Resampling.LANCZOS
             )

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import time
 from pathlib import Path
 
 import torch
 
-from src.backend.core.config import DeviceType, settings
+from src.backend.core.config import DeviceType, apply_data_dir, settings
 from src.backend.services.embedding_service_factory import create_embedding_service
 from src.profiling.sources import open_source
 
@@ -34,7 +35,9 @@ def parse_args() -> argparse.Namespace:
         "Images are streamed and never stored in full. Safe to stop and rerun.",
     )
     parser.add_argument(
-        "uri", help="a folder, s3://bucket/prefix, or a .parquet manifest"
+        "uri",
+        nargs="?",
+        help="a folder, s3://bucket/prefix, or a .parquet manifest",
     )
     parser.add_argument(
         "--anonymous",
@@ -56,6 +59,12 @@ def parse_args() -> argparse.Namespace:
         help="replace an existing index that this tool did not create",
     )
     parser.add_argument("--limit", type=int, help="only index the first N images")
+    parser.add_argument("--json", dest="json_path", help="also write a summary as JSON")
+    parser.add_argument(
+        "--status",
+        action="store_true",
+        help="print the progress of a running or finished ingest as JSON and exit",
+    )
     parser.add_argument(
         "--device", default="auto", choices=["auto", "cuda", "mps", "cpu"]
     )
@@ -82,11 +91,25 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def use_data_dir(data_dir: str) -> None:
-    root = Path(data_dir)
-    settings.embeddings_dir = str(root / "embeddings")
-    settings.thumbnails_dir = str(root / "thumbnails")
-    settings.processed_data_dir = str(root / "processed")
+def serve_command(data_dir: str | None) -> str:
+    prefix = f"DCE_DATA_DIR={data_dir} " if data_dir else ""
+    return f"{prefix}python -m src.backend.main"
+
+
+def summary(state: IngestState, embeddings_dir: Path, data_dir: str | None) -> dict:
+    counts = state.counts()
+    return {
+        "embeddings_dir": str(embeddings_dir),
+        "indexed": counts.get("done", 0),
+        "pending": counts.get("pending", 0),
+        "skipped": counts.get("skipped", 0),
+        "failed": counts.get("failed", 0),
+        "problems": [
+            {"status": status, "reason": reason, "count": count}
+            for status, reason, count in state.problems()
+        ],
+        "serve_command": serve_command(data_dir),
+    }
 
 
 def foreign_index_exists(embeddings_dir: Path) -> bool:
@@ -99,8 +122,21 @@ def main() -> int:
     args = parse_args()
     started = time.time()
     if args.data_dir:
-        use_data_dir(args.data_dir)
+        apply_data_dir(settings, args.data_dir)
     embeddings_dir = Path(settings.embeddings_dir)
+
+    if args.status:
+        if not (embeddings_dir / STATE_FILE).exists():
+            print(json.dumps({"error": f"no ingest has run in {embeddings_dir}"}))
+            return 1
+        state = IngestState(str(embeddings_dir / STATE_FILE), COMMIT_EVERY)
+        print(json.dumps(summary(state, embeddings_dir, args.data_dir), indent=2))
+        return 0
+    if not args.uri:
+        print(
+            "A source is required: a folder, s3://bucket/prefix, or a .parquet manifest."
+        )
+        return 2
 
     if foreign_index_exists(embeddings_dir) and not args.overwrite:
         print(
@@ -171,9 +207,12 @@ def main() -> int:
             print(f"  {status:<8} {count:>6,}  {error}")
 
     exported = export_for_backend(state, embeddings_dir)
-    state.close()
     print(f"Wrote {exported:,} embeddings to {embeddings_dir}")
-    print("Start the search server with: python -m src.backend.main")
+    print(f"Start the search server with: {serve_command(args.data_dir)}")
+    if args.json_path:
+        with open(args.json_path, "w") as handle:
+            json.dump(summary(state, embeddings_dir, args.data_dir), handle, indent=2)
+    state.close()
     return 0
 
 

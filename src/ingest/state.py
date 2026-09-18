@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import time
 from dataclasses import dataclass, field
 from typing import Any, Iterator
 
@@ -22,6 +23,9 @@ CREATE TABLE IF NOT EXISTS items (
 );
 CREATE INDEX IF NOT EXISTS idx_items_status ON items(status);
 """
+
+# Commit at least this often so that --status shows fresh progress.
+COMMIT_INTERVAL_SECONDS = 5
 
 # SQLite allows at most 999 bound parameters per statement by default.
 SQL_PARAMETER_CHUNK = 900
@@ -43,6 +47,7 @@ class IngestState:
         self.path = path
         self.commit_every = commit_every
         self.uncommitted = 0
+        self.last_commit = time.time()
         self.con = sqlite3.connect(path, check_same_thread=False)
         self.con.executescript(SCHEMA)
         self.con.commit()
@@ -81,12 +86,14 @@ class IngestState:
             ),
         )
         self.uncommitted += 1
-        if self.uncommitted >= self.commit_every:
+        overdue = time.time() - self.last_commit >= COMMIT_INTERVAL_SECONDS
+        if self.uncommitted >= self.commit_every or overdue:
             self.commit()
 
     def commit(self) -> None:
         self.con.commit()
         self.uncommitted = 0
+        self.last_commit = time.time()
 
     def counts(self) -> dict[str, int]:
         return dict(
