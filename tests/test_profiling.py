@@ -98,3 +98,13 @@ def test_empty_catalog_files_are_pointed_out(tmp_path):
     found = {c.key: c.looks_empty for c in result.scan.catalog_candidates}
     assert found == {"inventory.xlsx": True, "records.csv": False}
     assert "inventory.xlsx" in render(result)
+
+
+def test_a_parquet_file_in_s3_is_a_manifest_not_a_folder():
+    from src.profiling.sources import is_parquet
+
+    assert is_parquet("s3://my-bucket/catalog/manifest.parquet")
+    assert is_parquet("https://example.org/manifest.parquet?X-Amz-Signature=abc")
+    assert is_parquet("data/Manifest.PARQUET")
+    assert not is_parquet("s3://my-bucket/images/")
+    assert not is_parquet("/photos/parquet-floors")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -67,6 +68,11 @@ def classify(key: str, size: int, extra: dict | None = None) -> FileRef:
         is_junk=junk,
         extra=extra or {},
     )
+
+
+def is_parquet(uri: str) -> bool:
+    path = urlparse(uri).path if "://" in uri else uri
+    return path.lower().endswith(".parquet")
 
 
 def s3_client(anonymous: bool, region: str):
@@ -213,12 +219,13 @@ class ParquetManifestSource(Source):
         import duckdb
 
         self.path = path
+        self.local_path = self._local_copy(path, anonymous, region)
         self.con = duckdb.connect()
         self.con.execute("INSTALL httpfs; LOAD httpfs;")
         self.columns = [
             row[0]
             for row in self.con.execute(
-                f"DESCRIBE SELECT * FROM read_parquet('{path}')"
+                f"DESCRIBE SELECT * FROM read_parquet('{self.local_path}')"
             ).fetchall()
         ]
         self.url_column = url_column or self._guess(URL_COLUMN_GUESSES)
@@ -232,6 +239,18 @@ class ParquetManifestSource(Source):
             self.s3 = s3_client(anonymous, region)
         self._rows: list[tuple] | None = None
 
+    @staticmethod
+    def _local_copy(path: str, anonymous: bool, region: str) -> str:
+        if not path.startswith("s3://"):
+            return path
+        parsed = urlparse(path)
+        handle = tempfile.NamedTemporaryFile(suffix=".parquet", delete=False)
+        handle.close()
+        s3_client(anonymous, region).download_file(
+            parsed.netloc, parsed.path.lstrip("/"), handle.name
+        )
+        return handle.name
+
     def _guess(self, candidates):
         lowered = {c.lower(): c for c in self.columns}
         return next((lowered[c] for c in candidates if c in lowered), None)
@@ -239,7 +258,7 @@ class ParquetManifestSource(Source):
     def _load(self) -> list[tuple]:
         if self._rows is None:
             self._rows = self.con.execute(
-                f"SELECT * FROM read_parquet('{self.path}')"
+                f"SELECT * FROM read_parquet('{self.local_path}')"
             ).fetchall()
         return self._rows
 
@@ -314,8 +333,8 @@ class ParquetManifestSource(Source):
 def open_source(
     uri: str, anonymous: bool = False, fetch_via: str | None = None
 ) -> Source:
+    if is_parquet(uri):
+        return ParquetManifestSource(uri, fetch_via=fetch_via, anonymous=anonymous)
     if uri.startswith("s3://"):
         return S3Source(uri, anonymous=anonymous)
-    if uri.endswith(".parquet"):
-        return ParquetManifestSource(uri, fetch_via=fetch_via, anonymous=anonymous)
     return LocalDirSource(uri)
