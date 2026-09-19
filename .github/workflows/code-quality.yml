@@ -2,9 +2,9 @@ name: Code Quality
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [ main, next ]
   push:
-    branches: [ main ]
+    branches: [ main, next ]
 
 jobs:
   python-lint:
