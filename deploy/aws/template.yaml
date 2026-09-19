@@ -1,0 +1,210 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Digital Collections Explorer on one EC2 instance. The instance indexes the
+  collection once, then serves the search site. Deleting the stack removes
+  everything it created, including the index.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: {default: Your collection}
+        Parameters: [CollectionName, Source, FetchVia, AnonymousS3, SourceBucket, Limit]
+      - Label: {default: Machine}
+        Parameters: [InstanceType, DiskSizeGiB, AllowedCidr]
+      - Label: {default: Spending alert}
+        Parameters: [MonthlyBudgetUsd, BudgetEmail]
+      - Label: {default: Advanced}
+        Parameters: [Image, BootstrapUrl, LatestAmi]
+
+Parameters:
+  CollectionName:
+    Type: String
+    AllowedPattern: "^[a-z0-9][a-z0-9-]*$"
+    ConstraintDescription: lowercase letters, digits and hyphens only
+    Description: Short name for the collection, for example nmah-photographs.
+  Source:
+    Type: String
+    Description: Where the images are. An s3://bucket/prefix or the URL of a .parquet manifest.
+  FetchVia:
+    Type: String
+    Default: ""
+    Description: Only for manifests whose URLs are not downloadable. The s3://bucket that holds the files.
+  AnonymousS3:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: Read S3 without credentials. Use true for public buckets.
+  SourceBucket:
+    Type: String
+    Default: ""
+    Description: Only for a private bucket in this account. Its name, so the machine is allowed to read it.
+  Limit:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    Description: Index only the first N images. 0 means all of them.
+  InstanceType:
+    Type: String
+    Default: t3.medium
+    AllowedValues: [t3.small, t3.medium, t3.large, t3.xlarge, c7i.xlarge, c7i.2xlarge]
+    Description: >-
+      t3.medium is enough to serve searches. Indexing a large collection is faster
+      on a c7i. You can change this later; the index is kept.
+  DiskSizeGiB:
+    Type: Number
+    Default: 30
+    MinValue: 20
+    Description: The report from "python -m src.profiling" says how much disk a collection needs.
+  AllowedCidr:
+    Type: String
+    Default: 0.0.0.0/0
+    AllowedPattern: "^[0-9./]+$"
+    Description: Who may open the site. 0.0.0.0/0 is everyone. Use your office range to keep it internal.
+  MonthlyBudgetUsd:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    Description: Email an alert when this month's AWS bill passes this amount. 0 turns the alert off.
+  BudgetEmail:
+    Type: String
+    Default: ""
+    Description: Where to send the alert.
+  Image:
+    Type: String
+    Default: ghcr.io/hinxcode/digital-collections-explorer:latest
+  BootstrapUrl:
+    Type: String
+    Default: https://raw.githubusercontent.com/hinxcode/digital-collections-explorer/main/deploy/bootstrap.sh
+  LatestAmi:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+
+Conditions:
+  HasFetchVia: !Not [!Equals [!Ref FetchVia, ""]]
+  IsAnonymous: !Equals [!Ref AnonymousS3, "true"]
+  HasLimit: !Not [!Equals [!Ref Limit, 0]]
+  HasSourceBucket: !Not [!Equals [!Ref SourceBucket, ""]]
+  HasBudget: !And
+    - !Not [!Equals [!Ref MonthlyBudgetUsd, 0]]
+    - !Not [!Equals [!Ref BudgetEmail, ""]]
+
+Resources:
+  SiteSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub "Web access to the ${CollectionName} collection"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Ref AllowedCidr
+      Tags:
+        - {Key: dce-collection, Value: !Ref CollectionName}
+
+  # No SSH. Administrators connect through AWS Systems Manager Session Manager,
+  # so there is no port 22 to expose and no key pair to look after.
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: {Service: ec2.amazonaws.com}
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
+      Policies:
+        - !If
+          - HasSourceBucket
+          - PolicyName: read-source-bucket
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action: [s3:GetObject, s3:ListBucket]
+                  Resource:
+                    - !Sub "arn:${AWS::Partition}:s3:::${SourceBucket}"
+                    - !Sub "arn:${AWS::Partition}:s3:::${SourceBucket}/*"
+          - !Ref AWS::NoValue
+      Tags:
+        - {Key: dce-collection, Value: !Ref CollectionName}
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref InstanceRole]
+
+  Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmi
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref InstanceProfile
+      SecurityGroupIds: [!GetAtt SiteSecurityGroup.GroupId]
+      # Hop limit 2 lets the container, one network hop further in, use the
+      # instance role to read a private bucket.
+      MetadataOptions:
+        HttpTokens: required
+        HttpPutResponseHopLimit: 2
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: !Ref DiskSizeGiB
+            VolumeType: gp3
+            Encrypted: true
+            DeleteOnTermination: true
+      UserData:
+        Fn::Base64: !Join
+          - ""
+          - - "#!/bin/bash\n"
+            - "set -euxo pipefail\n"
+            - !Sub "curl -fsSL '${BootstrapUrl}' -o /usr/local/bin/dce-bootstrap\n"
+            - "chmod +x /usr/local/bin/dce-bootstrap\n"
+            - !Sub "/usr/local/bin/dce-bootstrap install --name '${CollectionName}' --source '${Source}' --port 80 --image '${Image}'"
+            - !If [HasFetchVia, !Sub " --fetch-via '${FetchVia}'", ""]
+            - !If [IsAnonymous, " --anonymous", ""]
+            - !If [HasLimit, !Sub " --limit ${Limit}", ""]
+            - "\n"
+      Tags:
+        - {Key: Name, Value: !Sub "dce-${CollectionName}"}
+        - {Key: dce-collection, Value: !Ref CollectionName}
+
+  # A fixed address, so the site keeps its URL when the machine is resized.
+  SiteAddress:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref Instance
+      Tags:
+        - {Key: dce-collection, Value: !Ref CollectionName}
+
+  SpendingAlert:
+    Type: AWS::Budgets::Budget
+    Condition: HasBudget
+    Properties:
+      Budget:
+        BudgetName: !Sub "dce-${CollectionName}-monthly"
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref MonthlyBudgetUsd
+          Unit: USD
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref BudgetEmail
+
+Outputs:
+  SiteUrl:
+    Description: Opens once indexing has finished.
+    Value: !Sub "http://${SiteAddress.PublicIp}"
+  InstanceId:
+    Value: !Ref Instance
+  Connect:
+    Description: Open a shell on the machine without SSH.
+    Value: !Sub "aws ssm start-session --target ${Instance} --region ${AWS::Region}"
