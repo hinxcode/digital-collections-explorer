@@ -143,6 +143,43 @@ Build options:
 - `--build-arg PRELOAD_MODEL=false` leaves the model out of the image. It is then
   downloaded each time a container starts.
 
+## Deploying to a Server or to AWS
+
+### Any Linux machine
+
+`deploy/bootstrap.sh` turns a Linux machine into a collection site with one command.
+It works the same on a cloud VM, a server in your own machine room, or a laptop. It
+installs Docker if needed, builds the index once, then serves the site and keeps it
+running across reboots.
+
+```bash
+sudo deploy/bootstrap.sh install --name my-collection --source /path/to/images
+sudo deploy/bootstrap.sh status --name my-collection
+sudo deploy/bootstrap.sh uninstall --name my-collection   # add --keep-data to keep the index
+```
+
+Indexing can be interrupted. It continues where it left off the next time the machine starts.
+
+### AWS
+
+`deploy/aws/` creates one small EC2 machine that runs the same bootstrap script. Before
+creating anything it lists what it will create and looks up the current AWS prices,
+and it does nothing until you type `yes`.
+
+```bash
+deploy/aws/deploy.sh my-collection --source s3://bucket/prefix --anonymous
+deploy/aws/status.sh my-collection
+deploy/aws/destroy.sh my-collection     # removes everything it created
+```
+
+The images must already be reachable from the cloud (an `s3://` or `https://` address).
+There is no SSH: administrators connect through AWS Session Manager. Pass `--budget` and
+`--email` to be warned when the monthly bill passes an amount you choose.
+
+The same template (`deploy/aws/template.yaml`) can be launched from the AWS console.
+Other clouds are not covered yet. The bootstrap script is cloud-neutral, so supporting
+one means writing only the small part that creates a machine and runs it.
+
 ## Model Configuration
 
 Configure the model in `config.json`:
