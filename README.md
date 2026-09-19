@@ -85,11 +85,125 @@ python -m src.backend.main
 
 The API server will start at http://localhost:8000
 
+## Large, Remote, or Unsorted Collections
+
+The steps above expect your images in `data/raw`. When a collection is too large for
+your disk, lives in an S3 bucket, or has never been organised, use the tools below
+instead. They need no metadata and never store the original images.
+
+```bash
+# 1. See what the collection contains, what is possible, and what indexing will cost
+python -m src.profiling /path/to/images
+python -m src.profiling s3://bucket/prefix --anonymous
+python -m src.profiling manifest.parquet --fetch-via s3://bucket
+
+# 2. Build the index. Safe to stop and rerun; it continues where it left off.
+python -m src.ingest /path/to/images --data-dir data/collections/my-collection
+
+# 3. Serve that collection
+DCE_DATA_DIR=data/collections/my-collection python -m src.backend.main
+```
+
+If you use an AI coding agent that supports [Agent Skills](https://agentskills.io)
+(Claude Code, Codex, Gemini CLI, Cursor, and others), the `dce-setup` skill in
+`skills/` walks through these steps for you. Ask it to make your collection searchable.
+
+## Running with Docker
+
+Building the index is a one-off job. Serving searches is a long-running service that
+does not need a GPU. The image supports both, so they can run on different machines.
+
+```bash
+docker build -t digital-collections-explorer .
+
+# Build the index once. The collection folder keeps the index, thumbnails and state.
+docker run --rm \
+  -v "$PWD/data/collections/my-collection:/data" \
+  -v /path/to/images:/source:ro \
+  digital-collections-explorer ingest /source
+
+# Serve it
+docker run -p 8000:8000 \
+  -v "$PWD/data/collections/my-collection:/data" \
+  digital-collections-explorer
+```
+
+The same two steps with Docker Compose:
+
+```bash
+SOURCE_DIR=/path/to/images COLLECTION=my-collection docker compose run --rm ingest
+COLLECTION=my-collection docker compose up serve
+```
+
+Build options:
+
+- `--build-arg COLLECTION_TYPE=maps` selects the frontend (`photographs`, `maps`, `documents`).
+- `--build-arg TORCH_VARIANT=cu124` installs the CUDA build of PyTorch for indexing on a
+  GPU. The default is the much smaller CPU build, which is all that serving needs.
+- `--build-arg PRELOAD_MODEL=false` leaves the model out of the image. It is then
+  downloaded each time a container starts.
+
+## Deploying to a Server or to AWS
+
+### Any Linux machine
+
+`deploy/bootstrap.sh` turns a Linux machine into a collection site with one command.
+It works the same on a cloud VM, a server in your own machine room, or a laptop. It
+installs Docker if needed, builds the index once, then serves the site and keeps it
+running across reboots.
+
+```bash
+sudo deploy/bootstrap.sh install --name my-collection --source /path/to/images
+sudo deploy/bootstrap.sh status --name my-collection
+sudo deploy/bootstrap.sh uninstall --name my-collection   # add --keep-data to keep the index
+```
+
+Indexing can be interrupted. It continues where it left off the next time the machine starts.
+
+### AWS
+
+`deploy/aws/` creates one small EC2 machine that runs the same bootstrap script. Before
+creating anything it lists what it will create and looks up the current AWS prices,
+and it does nothing until you type `yes`.
+
+```bash
+deploy/aws/deploy.sh my-collection --source s3://bucket/prefix --anonymous
+deploy/aws/status.sh my-collection
+deploy/aws/destroy.sh my-collection     # removes everything it created
+```
+
+The images must already be reachable from the cloud (an `s3://` or `https://` address).
+There is no SSH: administrators connect through AWS Session Manager. Pass `--budget` and
+`--email` to be warned when the monthly bill passes an amount you choose.
+
+The same template (`deploy/aws/template.yaml`) can be launched from the AWS console.
+Other clouds are not covered yet. The bootstrap script is cloud-neutral, so supporting
+one means writing only the small part that creates a machine and runs it.
+
 ## Model Configuration
 
 Configure the model in `config.json`:
 
-### Using CLIP (default)
+### Using SigLIP (default)
+
+[SigLIP](https://arxiv.org/abs/2303.15343) is an open-source multimodal embedding model created by Google DeepMind.
+
+```json
+{
+  "model_config": {
+    "model_type": "siglip",
+    "model_name": "google/siglip-base-patch16-224",
+    "device": "mps"
+  }
+}
+```
+
+In our tests on a museum collection it found clearly better matches than CLIP for
+English queries, and it stays usable for queries in other languages, where CLIP mostly
+fails. Search works best in English. It indexes about three times slower than CLIP and
+its index is about 1.5 times larger.
+
+### Using CLIP
 
 ```json
 {
@@ -101,19 +215,11 @@ Configure the model in `config.json`:
 }
 ```
 
-### Using SigLIP
+### Changing the model
 
-This project also supports [SigLIP](https://arxiv.org/abs/2303.15343) which is an open-source multimodal embedding model created by Google DeepMind.
-
-```json
-{
-  "model_config": {
-    "model_type": "siglip",
-    "model_name": "google/siglip-base-patch16-224",
-    "device": "mps"
-  }
-}
-```
+An index can only be searched with the model that built it. The server checks this
+when it starts and explains what to do if they differ. After changing the model,
+build a new index.
 
 **Device options:**
 

@@ -1,0 +1,26 @@
+# Build an index once, then serve it:
+#
+#   SOURCE_DIR=/path/to/images COLLECTION=my-collection docker compose run --rm ingest
+#   COLLECTION=my-collection docker compose up serve
+
+services:
+  serve:
+    image: digital-collections-explorer
+    build: .
+    command: ["serve"]
+    environment:
+      DCE_COLLECTION: ${COLLECTION:-demo}
+    ports:
+      - "${PORT:-8000}:8000"
+    volumes:
+      - ./data/collections/${COLLECTION:-demo}:/data
+    restart: unless-stopped
+
+  ingest:
+    image: digital-collections-explorer
+    build: .
+    profiles: ["tools"]
+    command: ["ingest", "/source"]
+    volumes:
+      - ./data/collections/${COLLECTION:-demo}:/data
+      - ${SOURCE_DIR:-./data/raw}:/source:ro

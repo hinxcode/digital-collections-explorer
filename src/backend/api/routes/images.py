@@ -3,9 +3,18 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 
+from src.backend.core.config import settings
 from src.backend.services.embedding_service import embedding_service
 
 router = APIRouter(tags=["images"])
+
+
+def resolve_path(path_str: str) -> Path:
+    """Resolve a stored path, which may be relative to the collection's data folder"""
+    path = Path(path_str)
+    if path.is_absolute() or path.exists() or not settings.data_dir:
+        return path
+    return Path(settings.data_dir) / path
 
 
 @router.get("/images/{id}")
@@ -42,7 +51,7 @@ async def get_image_by_id(
             status_code=404, detail="Image path not found in document metadata"
         )
 
-    path = Path(path_str)
+    path = resolve_path(path_str)
 
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"Image not found at path: {path}")
@@ -74,7 +83,11 @@ async def get_original_document(id: str):
             status_code=404, detail="Original file path not found in document metadata"
         )
 
-    path = Path(path_str)
+    path = resolve_path(path_str)
+
+    # An index built on another machine points at originals that are not here.
+    if not path.exists() and "processed" in doc["metadata"]["paths"]:
+        path = resolve_path(doc["metadata"]["paths"]["processed"])
 
     if not path.exists():
         raise HTTPException(
