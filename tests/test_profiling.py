@@ -1,5 +1,6 @@
 import os
 import tempfile
+from pathlib import Path
 
 import pytest
 from PIL import Image
@@ -108,3 +109,42 @@ def test_a_parquet_file_in_s3_is_a_manifest_not_a_folder():
     assert is_parquet("data/Manifest.PARQUET")
     assert not is_parquet("s3://my-bucket/images/")
     assert not is_parquet("/photos/parquet-floors")
+
+
+def test_private_manifest_is_read_even_when_images_are_anonymous(monkeypatch, tmp_path):
+    from src.profiling import sources
+
+    attempts = []
+
+    class FakeClient:
+        def __init__(self, anonymous):
+            self.anonymous = anonymous
+
+        def download_file(self, bucket, key, destination):
+            attempts.append(self.anonymous)
+            if self.anonymous:
+                raise RuntimeError("403 Forbidden")
+            Path(destination).write_bytes(b"parquet")
+
+    monkeypatch.setattr(
+        sources, "s3_client", lambda anonymous, region: FakeClient(anonymous)
+    )
+    local = sources.ParquetManifestSource._local_copy(
+        "s3://private-bucket/manifest.parquet", True, "us-west-2"
+    )
+    assert attempts == [True, False]
+    assert Path(local).read_bytes() == b"parquet"
+
+
+def test_unreadable_manifest_explains_what_to_check(monkeypatch):
+    from src.profiling import sources
+
+    class DeniedClient:
+        def download_file(self, bucket, key, destination):
+            raise RuntimeError("403 Forbidden")
+
+    monkeypatch.setattr(sources, "s3_client", lambda anonymous, region: DeniedClient())
+    with pytest.raises(PermissionError, match="may read the bucket"):
+        sources.ParquetManifestSource._local_copy(
+            "s3://private-bucket/manifest.parquet", True, "us-west-2"
+        )

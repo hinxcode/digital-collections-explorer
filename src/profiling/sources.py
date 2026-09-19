@@ -246,10 +246,19 @@ class ParquetManifestSource(Source):
         parsed = urlparse(path)
         handle = tempfile.NamedTemporaryFile(suffix=".parquet", delete=False)
         handle.close()
-        s3_client(anonymous, region).download_file(
-            parsed.netloc, parsed.path.lstrip("/"), handle.name
-        )
-        return handle.name
+        bucket, key = parsed.netloc, parsed.path.lstrip("/")
+        for attempt_anonymous in (anonymous, not anonymous):
+            try:
+                s3_client(attempt_anonymous, region).download_file(
+                    bucket, key, handle.name
+                )
+                return handle.name
+            except Exception as error:
+                last_error = error
+        raise PermissionError(
+            f"Could not read {path}, with or without AWS credentials. "
+            f"Check that the file exists and that this machine may read the bucket."
+        ) from last_error
 
     def _guess(self, candidates):
         lowered = {c.lower(): c for c in self.columns}
