@@ -47,3 +47,12 @@ def test_bootstrap_rejects_unsafe_collection_names():
     )
     assert result.returncode != 0
     assert "lowercase" in result.stderr
+
+
+def test_deploy_never_prints_the_full_account_id():
+    script = (ROOT / "deploy/aws/deploy.sh").read_text()
+    printed = [
+        line for line in script.splitlines() if "echo" in line and "ACCOUNT" in line
+    ]
+    assert printed, "the account should still be identified to the person deploying"
+    assert all("${ACCOUNT: -4}" in line for line in printed)

@@ -87,7 +87,9 @@ PYTHON="python3"
 [ -x "$HERE/../../venv/bin/python" ] && PYTHON="$HERE/../../venv/bin/python"
 
 echo
-echo "This will create the following in AWS account $ACCOUNT, region $REGION:"
+# Only the last four digits are shown, so that pasted output does not reveal the
+# full account id.
+echo "This will create the following in AWS account ending in ${ACCOUNT: -4}, region $REGION:"
 echo
 echo "  1 virtual machine ($INSTANCE_TYPE) that indexes '$SOURCE' and then serves the site"
 echo "  1 disk of $DISK_GIB GB, deleted together with the machine"
