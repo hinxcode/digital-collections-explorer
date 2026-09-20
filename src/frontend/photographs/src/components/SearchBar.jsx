@@ -1,143 +1,164 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import './SearchBar.css';
 
+const SearchIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <circle cx="11" cy="11" r="7" />
+    <path d="M16.5 16.5 21 21" />
+  </svg>
+);
+
+const CameraIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M4 8h3l1.6-2.5h6.8L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z" />
+    <circle cx="12" cy="13.2" r="3.4" />
+  </svg>
+);
+
+const CloseIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M6 6l12 12M18 6 6 18" />
+  </svg>
+);
+
+const NARROW_SCREEN = '(max-width: 600px)';
+const PLACEHOLDER = 'Describe what you are looking for, in your own words';
+const SHORT_PLACEHOLDER = 'Describe what you want to see';
+
+// The full hint does not fit a phone, where it would be cut off mid-word.
+const usePlaceholder = () => {
+  const [isNarrow, setIsNarrow] = useState(() => window.matchMedia(NARROW_SCREEN).matches);
+
+  useEffect(() => {
+    const query = window.matchMedia(NARROW_SCREEN);
+    const onChange = (e) => setIsNarrow(e.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+
+  return isNarrow ? SHORT_PLACEHOLDER : PLACEHOLDER;
+};
+
+const imageFrom = (fileList) => (
+  Array.from(fileList || []).find((file) => file.type.startsWith('image/')) || null
+);
+
+/**
+ * One field for both kinds of search: type a description, or give it a picture
+ * by choosing, dropping or pasting one.
+ */
 function SearchBar({
   inputRef,
-  searchMode,
-  setSearchMode,
   searchQuery,
   setSearchQuery,
   uploadedImage,
-  setUploadedImage,
   onSearchByText,
   onSearchByImage,
+  onClearImage,
 }) {
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const fileInputRef = useRef(null);
+  const placeholder = usePlaceholder();
+
+  useEffect(() => {
+    if (!uploadedImage) {
+      setPreviewUrl(null);
+      return undefined;
+    }
+    const url = URL.createObjectURL(uploadedImage);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [uploadedImage]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
-    if (searchMode === 'text') {
-      onSearchByText(searchQuery);
-    } else if (searchMode === 'image' && uploadedImage) {
-      onSearchByImage(uploadedImage);
+    onSearchByText(searchQuery);
+  };
+
+  const handleFileChosen = (e) => {
+    const image = imageFrom(e.target.files);
+    if (image) {
+      onSearchByImage(image);
+    }
+    e.target.value = '';
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+    const image = imageFrom(e.dataTransfer.files);
+    if (image) {
+      onSearchByImage(image);
     }
   };
 
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    setUploadedImage(file);
-    
-    // Create a preview URL for the uploaded image
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setPreviewUrl(reader.result);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const clearImage = () => {
-    setUploadedImage(null);
-    setPreviewUrl(null);
-
-    if (document.getElementById('image-upload')) {
-      document.getElementById('image-upload').value = '';
-    }
-  };
-
-  const switchMode = (mode) => {
-    setSearchMode(mode);
-
-    if (mode === 'text') {
-      clearImage();
-    } else {
-      setSearchQuery('');
+  const handlePaste = (e) => {
+    const image = imageFrom(e.clipboardData.files);
+    if (image) {
+      e.preventDefault();
+      onSearchByImage(image);
     }
   };
 
   return (
     <div className="search-bar">
-      <div className="search-mode-selector">
-        <button 
-          className={`mode-button ${searchMode === 'text' ? 'active' : ''}`}
-          onClick={() => switchMode('text')}
+      <form
+        className={`search-field ${isDraggingOver ? 'search-field-dragging' : ''}`}
+        role="search"
+        onSubmit={handleSubmit}
+        onDragOver={(e) => { e.preventDefault(); setIsDraggingOver(true); }}
+        onDragLeave={() => setIsDraggingOver(false)}
+        onDrop={handleDrop}
+      >
+        <input
+          ref={inputRef}
+          type="search"
+          className="search-input"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onPaste={handlePaste}
+          placeholder={placeholder}
+          aria-label="Search the collection"
+          enterKeyHint="search"
+        />
+        <button
           type="button"
+          className="search-field-button"
+          onClick={() => fileInputRef.current?.click()}
+          aria-label="Search with an image"
+          title="Search with an image. You can also drop or paste one here."
         >
-          Text Search
+          <CameraIcon />
         </button>
-        <button 
-          className={`mode-button ${searchMode === 'image' ? 'active' : ''}`}
-          onClick={() => switchMode('image')}
-          type="button"
+        <button
+          type="submit"
+          className={`search-submit ${searchQuery.trim() ? 'search-submit-ready' : ''}`}
+          aria-label="Search"
+          title="Search"
         >
-          Image Search
+          <SearchIcon />
         </button>
-      </div>
-
-      <form onSubmit={handleSubmit}>
-        {searchMode === 'text' ? (
-          <>
-            <input
-              ref={inputRef}
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search historical photographs..."
-              className="search-input"
-              aria-label="Search photographs"
-            />
-            <button type="submit" className="search-button">
-              <span className="search-icon">🔍</span>
-              <span className="search-text">Search</span>
-            </button>
-          </>
-        ) : (
-          <div className="image-search-container">
-            {!previewUrl ? (
-              <div className="image-upload">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageChange}
-                  id="image-upload"
-                  className="image-input"
-                />
-                <label htmlFor="image-upload" className="image-upload-label">
-                  <span className="upload-icon">📷</span>
-                  <span>Select an image or drag & drop</span>
-                </label>
-              </div>
-            ) : (
-              <div className="image-preview-container">
-                <img src={previewUrl} alt="Preview" className="image-preview" />
-                <button 
-                  type="button"
-                  className="clear-image-button"
-                  onClick={clearImage}
-                >
-                  ✕
-                </button>
-              </div>
-            )}
-            <button 
-              type="submit" 
-              className="search-button"
-              disabled={!uploadedImage}
-            >
-              <span className="search-icon">🔍</span>
-              <span className="search-text">Find Similar</span>
-            </button>
-          </div>
-        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="search-file-input"
+          onChange={handleFileChosen}
+          tabIndex={-1}
+          aria-hidden="true"
+        />
       </form>
 
-      {searchMode === 'text' && (
-        <div className="search-suggestions">
-          <p>
-            Try searching for: "city streets" or "people in uniform"
-          </p>
+      {isDraggingOver && <p className="search-hint">Drop the image to find ones like it</p>}
+
+      {previewUrl && !isDraggingOver && (
+        <div className="search-image-chip">
+          <img src={previewUrl} alt="" />
+          <span>Showing images like this one</span>
+          <button type="button" onClick={onClearImage} aria-label="Remove the image">
+            <CloseIcon />
+          </button>
         </div>
       )}
     </div>

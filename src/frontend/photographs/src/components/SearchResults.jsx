@@ -1,42 +1,17 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { Gallery } from 'react-grid-gallery';
-import Lightbox from 'yet-another-react-lightbox';
-import Captions from 'yet-another-react-lightbox/plugins/captions';
-import Thumbnails from 'yet-another-react-lightbox/plugins/thumbnails';
-import Zoom from 'yet-another-react-lightbox/plugins/zoom';
-import 'yet-another-react-lightbox/styles.css';
-import 'yet-another-react-lightbox/plugins/captions.css';
-import 'yet-another-react-lightbox/plugins/thumbnails.css';
+import React from 'react';
+import ImageGrid from './ImageGrid';
 import Pagination from './Pagination';
 import './SearchResults.css';
 
-const SearchResults = React.memo(({ 
-  photos,
+const SearchResults = React.memo(({
+  items,
   isLoading,
   error,
   currentPage,
   setCurrentPage,
   hasMore,
+  heading,
 }) => {
-  const [currentLightboxImageIndex, setCurrentLightboxImageIndex] = useState(0);
-  const [lightboxIsOpen, setLightboxIsOpen] = useState(false);
-
-  const lightboxSlides = useMemo(() => photos.map(photo => ({
-    src: photo.src,
-    alt: photo.alt,
-    title: photo?.originalData?.metadata?.title || photo?.originalData?.metadata?.file_name || 'Untitled',
-    description: photo?.originalData?.metadata?.description || photo?.originalData?.metadata?.paths?.original,
-  })), [photos]);
-
-  const handleLightboxOpened = useCallback((index) => {
-    setCurrentLightboxImageIndex(index);
-    setLightboxIsOpen(true);
-  }, []);
-
-  const handleLightboxClosed = useCallback(() => {
-    setLightboxIsOpen(false);
-  }, []);
-
   if (isLoading) {
     return (
       <div className="loading-indicator">
@@ -53,34 +28,30 @@ const SearchResults = React.memo(({
     );
   }
 
+  if (items.length === 0) {
+    return (
+      <div className="no-results">
+        <p>Nothing matched. Try describing what the picture looks like.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="gallery-container">
-      {
-        photos.length > 0 && (
-          <>
-            <Gallery
-              images={photos}
-              enableImageSelection={false}
-              onClick={handleLightboxOpened}
-              margin={2}
-              rowHeight={180}
-            />
-            <Lightbox
-              slides={lightboxSlides}
-              open={lightboxIsOpen}
-              index={currentLightboxImageIndex}
-              close={handleLightboxClosed}
-              plugins={[Captions, Thumbnails, Zoom]}
-            />
-            <Pagination
-              currentPage={currentPage}
-              setCurrentPage={setCurrentPage}
-              hasMore={hasMore}
-              isLoading={isLoading}
-            />
-          </>
-        )
-      }
+      <div className="results-heading">
+        <h2>{heading}</h2>
+        <p>
+          Each object appears once. A number such as +3 means there are more photos of
+          it. Ranked by an AI model, best matches first.
+        </p>
+      </div>
+      <ImageGrid items={items} />
+      <Pagination
+        currentPage={currentPage}
+        setCurrentPage={setCurrentPage}
+        hasMore={hasMore}
+        isLoading={isLoading}
+      />
     </div>
   );
 });

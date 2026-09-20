@@ -3,28 +3,6 @@
   100% { transform: rotate(360deg); }
 }
 
-.ReactGridGallery_tile {
-  cursor: pointer;
-  transition: transform 0.2s;
-  background-color: transparent !important;
-  border: none !important;
-  padding: 0 !important;
-  margin: 0 !important;
-}
-
-.ReactGridGallery_tile:hover {
-  transform: scale(1.02);
-  z-index: 1;
-}
-
-.ReactGridGallery_tile-viewport {
-  border-radius: 4px;
-  overflow: hidden;
-  box-shadow: none !important;
-  border: none !important;
-  background-color: transparent !important;
-}
-
 /* Lightbox customization */
 .yarl__container {
   background-color: rgba(0, 0, 0, 0.9);
