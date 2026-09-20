@@ -99,6 +99,12 @@ class EmbeddingService:
 
         return None
 
+    def similarity_scores(self, query_embedding: torch.Tensor) -> torch.Tensor:
+        """Raw similarity of every item to the query, which is what ranking uses"""
+        if not self.is_loaded:
+            self.load_embeddings()
+        return torch.matmul(self.embeddings, query_embedding.t()).squeeze()
+
     def search(
         self,
         query_embedding: torch.Tensor,
