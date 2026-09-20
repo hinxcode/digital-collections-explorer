@@ -188,6 +188,18 @@ deploy/aws/status.sh my-collection
 deploy/aws/destroy.sh my-collection     # removes everything it created
 ```
 
+Indexing is the only heavy work, so it pays to index on a large machine and serve from a
+small one. Run `deploy.sh` again with the same name and a different `--instance-type`:
+the machine restarts as the new type and keeps its index and its address. The script
+never lets an update replace the machine, which would delete the index: it keeps the
+machine's operating system image fixed and refuses to change the disk size.
+
+```bash
+deploy/aws/deploy.sh my-collection --source s3://bucket/prefix --anonymous --instance-type c7i.2xlarge
+# ...once status.sh reports that indexing has finished:
+deploy/aws/deploy.sh my-collection --source s3://bucket/prefix --anonymous --instance-type t3.medium
+```
+
 The images must already be reachable from the cloud (an `s3://` or `https://` address).
 There is no SSH: administrators connect through AWS Session Manager. Pass `--budget` and
 `--email` to be warned when the monthly bill passes an amount you choose.

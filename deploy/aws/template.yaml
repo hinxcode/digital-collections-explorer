@@ -14,7 +14,7 @@ Metadata:
       - Label: {default: Spending alert}
         Parameters: [MonthlyBudgetUsd, BudgetEmail]
       - Label: {default: Advanced}
-        Parameters: [Image, BootstrapUrl, LatestAmi]
+        Parameters: [Image, BootstrapUrl, MachineImageId]
 
 Parameters:
   CollectionName:
@@ -75,9 +75,12 @@ Parameters:
   BootstrapUrl:
     Type: String
     Default: https://raw.githubusercontent.com/hinxcode/digital-collections-explorer/main/deploy/bootstrap.sh
-  LatestAmi:
-    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+  # A fixed image id, never "the latest". Changing the image replaces the machine,
+  # and the index lives on its disk. deploy.sh looks up the latest Amazon Linux 2023
+  # image for a new deployment and reuses the machine's own image for every update.
+  MachineImageId:
+    Type: AWS::EC2::Image::Id
+    Description: Amazon Linux 2023 (x86_64) image for the machine. deploy.sh fills this in.
 
 Conditions:
   HasFetchVia: !Not [!Equals [!Ref FetchVia, ""]]
@@ -138,7 +141,7 @@ Resources:
   Instance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Ref LatestAmi
+      ImageId: !Ref MachineImageId
       InstanceType: !Ref InstanceType
       IamInstanceProfile: !Ref InstanceProfile
       SecurityGroupIds: [!GetAtt SiteSecurityGroup.GroupId]

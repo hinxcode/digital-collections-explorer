@@ -80,8 +80,36 @@ s3://* | http://* | https://*) ;;
 esac
 
 STACK="dce-$NAME"
+LATEST_IMAGE_PARAMETER="/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
 ACCOUNT="$(aws sts get-caller-identity --query Account --output text)" ||
     fail "could not sign in to AWS. Check your credentials."
+
+# Two changes would make CloudFormation replace the machine, and the index lives on
+# its disk: a different machine image, and a different disk size. An update therefore
+# keeps the image the machine already runs, and refuses to change the disk.
+EXISTING_INSTANCE="$(aws cloudformation describe-stacks --region "$REGION" --stack-name "$STACK" \
+    --query "Stacks[0].Outputs[?OutputKey=='InstanceId'].OutputValue" --output text 2>/dev/null)" || EXISTING_INSTANCE=""
+
+if [ -n "$EXISTING_INSTANCE" ] && [ "$EXISTING_INSTANCE" != "None" ]; then
+    IS_UPDATE="true"
+    MACHINE_IMAGE="$(aws ec2 describe-instances --region "$REGION" --instance-ids "$EXISTING_INSTANCE" \
+        --query "Reservations[0].Instances[0].ImageId" --output text)" ||
+        fail "could not read the existing machine. Nothing was changed."
+    CURRENT_DISK="$(aws cloudformation describe-stacks --region "$REGION" --stack-name "$STACK" \
+        --query "Stacks[0].Parameters[?ParameterKey=='DiskSizeGiB'].ParameterValue" --output text)"
+    if [ "$CURRENT_DISK" != "$DISK_GIB" ]; then
+        fail "this deployment has a $CURRENT_DISK GB disk. Changing it to $DISK_GIB GB would replace the machine and delete its index. Run again with --disk-gib $CURRENT_DISK."
+    fi
+else
+    IS_UPDATE="false"
+    MACHINE_IMAGE="$(aws ssm get-parameter --region "$REGION" --name "$LATEST_IMAGE_PARAMETER" \
+        --query Parameter.Value --output text)" ||
+        fail "could not look up the Amazon Linux image for $REGION."
+fi
+case "$MACHINE_IMAGE" in
+ami-*) ;;
+*) fail "unexpected machine image id: $MACHINE_IMAGE. Nothing was changed." ;;
+esac
 
 PYTHON="python3"
 [ -x "$HERE/../../venv/bin/python" ] && PYTHON="$HERE/../../venv/bin/python"
@@ -89,7 +117,15 @@ PYTHON="python3"
 echo
 # Only the last four digits are shown, so that pasted output does not reveal the
 # full account id.
-echo "This will create the following in AWS account ending in ${ACCOUNT: -4}, region $REGION:"
+if [ "$IS_UPDATE" = "true" ]; then
+    echo "A deployment named $NAME already exists (machine $EXISTING_INSTANCE)."
+    echo "It will be updated in place. The index on its disk and its address are kept."
+    echo "If the machine type changes, the site is offline for a few minutes while it restarts."
+    echo
+    echo "After the update it will consist of, in AWS account ending in ${ACCOUNT: -4}, region $REGION:"
+else
+    echo "This will create the following in AWS account ending in ${ACCOUNT: -4}, region $REGION:"
+fi
 echo
 echo "  1 virtual machine ($INSTANCE_TYPE) that indexes '$SOURCE' and then serves the site"
 echo "  1 disk of $DISK_GIB GB, deleted together with the machine"
@@ -106,15 +142,19 @@ echo "Remove everything again with: deploy/aws/destroy.sh $NAME --region $REGION
 echo
 
 if [ "$ASSUME_YES" != "true" ]; then
-    read -r -p "Create these resources? Type yes to continue: " answer
-    [ "$answer" = "yes" ] || { echo "Nothing was created."; exit 0; }
+    if [ "$IS_UPDATE" = "true" ]; then
+        read -r -p "Update this deployment? Type yes to continue: " answer
+    else
+        read -r -p "Create these resources? Type yes to continue: " answer
+    fi
+    [ "$answer" = "yes" ] || { echo "Nothing was changed."; exit 0; }
 fi
 
 overrides=(
     "CollectionName=$NAME" "Source=$SOURCE" "FetchVia=$FETCH_VIA"
     "AnonymousS3=$ANONYMOUS" "SourceBucket=$SOURCE_BUCKET" "Limit=$LIMIT"
     "InstanceType=$INSTANCE_TYPE" "DiskSizeGiB=$DISK_GIB" "AllowedCidr=$ALLOWED_CIDR"
-    "MonthlyBudgetUsd=$BUDGET" "BudgetEmail=$EMAIL"
+    "MonthlyBudgetUsd=$BUDGET" "BudgetEmail=$EMAIL" "MachineImageId=$MACHINE_IMAGE"
 )
 [ -n "$IMAGE" ] && overrides+=("Image=$IMAGE")
 [ -n "$BOOTSTRAP_URL" ] && overrides+=("BootstrapUrl=$BOOTSTRAP_URL")
