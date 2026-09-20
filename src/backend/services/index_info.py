@@ -1,9 +1,4 @@
-"""
-Records which model built an index, so a server never searches it with another one.
-
-Vectors from different models are not comparable. Mixing them does not raise an
-error, it silently returns meaningless results, so the mismatch is caught up front.
-"""
+"""Records which model built an index, so it is never searched with another one."""
 
 import json
 from pathlib import Path
@@ -11,8 +6,7 @@ from typing import Optional
 
 INDEX_INFO_FILE = "index_info.json"
 
-# Vector widths of the models this project documents, used to name the likely
-# builder of an index that predates index_info.json.
+# Vector width of each documented model, to name the builder of an older index.
 KNOWN_DIMENSIONS = {
     512: "openai/clip-vit-base-patch32",
     768: "google/siglip-base-patch16-224",

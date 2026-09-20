@@ -59,7 +59,6 @@ def test_deploy_never_prints_the_full_account_id():
 
 
 FAKE_AWS = r"""#!/usr/bin/env bash
-# Stands in for the AWS CLI: records every call and answers like a real account.
 echo "$*" >> "$FAKE_AWS_LOG"
 case "$*" in
 *"sts get-caller-identity"*) echo "123456789012" ;;
@@ -70,7 +69,6 @@ case "$*" in
 *"describe-instances"*) echo "ami-0existing111" ;;
 *"ssm get-parameter"*) echo "ami-0latest999" ;;
 *"cloudformation deploy"*)
-    # Optionally behave like an editor saving the script while it waits here.
     if [ -n "$FAKE_OVERWRITE_SCRIPT" ]; then
         { head -c 3000 /dev/zero | tr '\0' '#'; echo; cat "$FAKE_OVERWRITE_SCRIPT"; } > "$FAKE_OVERWRITE_SCRIPT.new"
         cat "$FAKE_OVERWRITE_SCRIPT.new" > "$FAKE_OVERWRITE_SCRIPT"
@@ -142,9 +140,6 @@ def test_update_refuses_to_change_the_disk_because_that_deletes_the_index(fake_d
 
 
 def test_script_survives_being_saved_while_it_waits_for_aws(fake_deploy):
-    # Bash reads a script from disk as it runs. Saving deploy.sh during the wait for
-    # CloudFormation once made it resume mid-comment and fail with "t: command not
-    # found", after the machine existed but before its address was printed.
     result, deploys = fake_deploy(False, overwrite_while_running=True)
     assert result.returncode == 0, result.stderr
     assert "command not found" not in result.stderr

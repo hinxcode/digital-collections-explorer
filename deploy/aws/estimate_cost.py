@@ -1,9 +1,4 @@
-"""
-Look up current AWS prices for one Digital Collections Explorer deployment.
-
-Prices come from the AWS Price List API at the time of the call, so the estimate
-shown before deploying is never a stale number copied into a script.
-"""
+"""Look up current AWS prices for one Digital Collections Explorer deployment."""
 
 import argparse
 import json

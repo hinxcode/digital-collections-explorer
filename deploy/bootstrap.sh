@@ -1,17 +1,9 @@
 #!/usr/bin/env bash
 #
-# Turn any Linux machine into a Digital Collections Explorer site.
-# Works the same on a cloud VM, a server in a machine room, or a laptop.
 #
-#   sudo ./bootstrap.sh install --name my-collection --source /path/to/images
-#   sudo ./bootstrap.sh status --name my-collection
-#   sudo ./bootstrap.sh uninstall --name my-collection
 
 set -euo pipefail
 
-# Bash reads a script from disk while it runs. Without these braces, saving this file
-# during one of its long waits makes bash continue from the old position in the new
-# text and run whatever it finds there. The braces make it read everything up front.
 {
 
 IMAGE="ghcr.io/hinxcode/digital-collections-explorer:latest"
@@ -106,7 +98,6 @@ fetch_image() {
     fi
 }
 
-# Sets SOURCE_ARG (what ingest is told) and SOURCE_MOUNT (extra docker flags).
 resolve_source() {
     SOURCE_MOUNT=""
     case "$SOURCE" in
@@ -134,8 +125,6 @@ write_runner() {
 
     cat >"$RUNNER" <<EOF
 #!/usr/bin/env bash
-# Written by bootstrap.sh. Builds the index once, then serves it.
-# Indexing can be interrupted: it continues where it left off on the next start.
 set -euo pipefail
 
 if [ ! -f "$COLLECTION_DIR/ingest_complete" ]; then

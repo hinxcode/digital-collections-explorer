@@ -25,7 +25,6 @@ const NARROW_SCREEN = '(max-width: 600px)';
 const PLACEHOLDER = 'Describe what you are looking for, in your own words';
 const SHORT_PLACEHOLDER = 'Describe what you want to see';
 
-// The full hint does not fit a phone, where it would be cut off mid-word.
 const usePlaceholder = () => {
   const [isNarrow, setIsNarrow] = useState(() => window.matchMedia(NARROW_SCREEN).matches);
 
@@ -43,10 +42,6 @@ const imageFrom = (fileList) => (
   Array.from(fileList || []).find((file) => file.type.startsWith('image/')) || null
 );
 
-/**
- * One field for both kinds of search: type a description, or give it a picture
- * by choosing, dropping or pasting one.
- */
 function SearchBar({
   inputRef,
   searchQuery,

@@ -1,14 +1,9 @@
 #!/usr/bin/env bash
 #
-# Show how a deployed collection is doing: the stack, indexing progress, the site.
 #
-#   deploy/aws/status.sh my-collection
 
 set -euo pipefail
 
-# Bash reads a script from disk while it runs. Without these braces, saving this file
-# during one of its long waits makes bash continue from the old position in the new
-# text and run whatever it finds there. The braces make it read everything up front.
 {
 
 # Seconds to wait for the machine to answer the progress question.

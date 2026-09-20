@@ -1,15 +1,9 @@
 #!/usr/bin/env bash
 #
-# Create (or update) one collection's site on AWS. Shows what will be created and
-# what it costs, and does nothing until you agree.
 #
-#   deploy/aws/deploy.sh my-collection --source s3://bucket/prefix --anonymous
 
 set -euo pipefail
 
-# Bash reads a script from disk while it runs. Without these braces, saving this file
-# during one of its long waits makes bash continue from the old position in the new
-# text and run whatever it finds there. The braces make it read everything up front.
 {
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -89,9 +83,6 @@ LATEST_IMAGE_PARAMETER="/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-d
 ACCOUNT="$(aws sts get-caller-identity --query Account --output text)" ||
     fail "could not sign in to AWS. Check your credentials."
 
-# Two changes would make CloudFormation replace the machine, and the index lives on
-# its disk: a different machine image, and a different disk size. An update therefore
-# keeps the image the machine already runs, and refuses to change the disk.
 EXISTING_INSTANCE="$(aws cloudformation describe-stacks --region "$REGION" --stack-name "$STACK" \
     --query "Stacks[0].Outputs[?OutputKey=='InstanceId'].OutputValue" --output text 2>/dev/null)" || EXISTING_INSTANCE=""
 
@@ -120,8 +111,6 @@ PYTHON="python3"
 [ -x "$HERE/../../venv/bin/python" ] && PYTHON="$HERE/../../venv/bin/python"
 
 echo
-# Only the last four digits are shown, so that pasted output does not reveal the
-# full account id.
 if [ "$IS_UPDATE" = "true" ]; then
     echo "A deployment named $NAME already exists (machine $EXISTING_INSTANCE)."
     echo "It will be updated in place. The index on its disk and its address are kept."

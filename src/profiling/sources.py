@@ -28,8 +28,7 @@ SIZE_COLUMN_GUESSES = ["size_bytes", "size", "bytes", "filesize"]
 JPEG_MAGIC = b"\xff\xd8\xff"
 PNG_MAGIC = b"\x89PN"
 
-# Bandwidth probe: full downloads of mid-sized files. Timing 128 KB header
-# reads measures request latency, not throughput.
+# Bandwidth probe: whole files between 200 KB and 20 MB, since small reads measure latency.
 PROBE_MIN_BYTES = 200_000
 PROBE_MAX_BYTES = 20_000_000
 PROBE_FILES = 6

@@ -75,9 +75,6 @@ Parameters:
   BootstrapUrl:
     Type: String
     Default: https://raw.githubusercontent.com/hinxcode/digital-collections-explorer/main/deploy/bootstrap.sh
-  # A fixed image id, never "the latest". Changing the image replaces the machine,
-  # and the index lives on its disk. deploy.sh looks up the latest Amazon Linux 2023
-  # image for a new deployment and reuses the machine's own image for every update.
   MachineImageId:
     Type: AWS::EC2::Image::Id
     Description: Amazon Linux 2023 (x86_64) image for the machine. deploy.sh fills this in.
@@ -104,8 +101,6 @@ Resources:
       Tags:
         - {Key: dce-collection, Value: !Ref CollectionName}
 
-  # No SSH. Administrators connect through AWS Systems Manager Session Manager,
-  # so there is no port 22 to expose and no key pair to look after.
   InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -145,8 +140,7 @@ Resources:
       InstanceType: !Ref InstanceType
       IamInstanceProfile: !Ref InstanceProfile
       SecurityGroupIds: [!GetAtt SiteSecurityGroup.GroupId]
-      # Hop limit 2 lets the container, one network hop further in, use the
-      # instance role to read a private bucket.
+      # 2 hops: the container sits one hop behind the instance and needs its role.
       MetadataOptions:
         HttpTokens: required
         HttpPutResponseHopLimit: 2
@@ -173,7 +167,6 @@ Resources:
         - {Key: Name, Value: !Sub "dce-${CollectionName}"}
         - {Key: dce-collection, Value: !Ref CollectionName}
 
-  # A fixed address, so the site keeps its URL when the machine is resized.
   SiteAddress:
     Type: AWS::EC2::EIP
     Properties:
