@@ -69,7 +69,13 @@ case "$*" in
 *"describe-stacks"*"DiskSizeGiB"*) echo "40" ;;
 *"describe-instances"*) echo "ami-0existing111" ;;
 *"ssm get-parameter"*) echo "ami-0latest999" ;;
-*"cloudformation deploy"*) echo "Successfully created/updated stack" ;;
+*"cloudformation deploy"*)
+    # Optionally behave like an editor saving the script while it waits here.
+    if [ -n "$FAKE_OVERWRITE_SCRIPT" ]; then
+        { head -c 3000 /dev/zero | tr '\0' '#'; echo; cat "$FAKE_OVERWRITE_SCRIPT"; } > "$FAKE_OVERWRITE_SCRIPT.new"
+        cat "$FAKE_OVERWRITE_SCRIPT.new" > "$FAKE_OVERWRITE_SCRIPT"
+    fi
+    echo "Successfully created/updated stack" ;;
 *) echo "SiteUrl http://203.0.113.10" ;;
 esac
 """
@@ -89,7 +95,7 @@ def fake_deploy(tmp_path):
     (fake_bin / "python3").chmod(0o755)
     log = tmp_path / "aws.log"
 
-    def run(stack_exists, *extra):
+    def run(stack_exists, *extra, overwrite_while_running=False):
         import os
 
         log.write_text("")
@@ -98,6 +104,9 @@ def fake_deploy(tmp_path):
             "PATH": f"{fake_bin}:{os.environ['PATH']}",
             "FAKE_AWS_LOG": str(log),
             "FAKE_STACK_EXISTS": "true" if stack_exists else "false",
+            "FAKE_OVERWRITE_SCRIPT": (
+                str(scripts / "deploy.sh") if overwrite_while_running else ""
+            ),
         }
         command = ["bash", str(scripts / "deploy.sh"), "demo", "--yes"]
         command += ["--source", "s3://bucket/images", "--disk-gib", "40", *extra]
@@ -130,3 +139,13 @@ def test_update_refuses_to_change_the_disk_because_that_deletes_the_index(fake_d
     assert result.returncode != 0
     assert deploys == []
     assert "delete its index" in result.stderr
+
+
+def test_script_survives_being_saved_while_it_waits_for_aws(fake_deploy):
+    # Bash reads a script from disk as it runs. Saving deploy.sh during the wait for
+    # CloudFormation once made it resume mid-comment and fail with "t: command not
+    # found", after the machine existed but before its address was printed.
+    result, deploys = fake_deploy(False, overwrite_while_running=True)
+    assert result.returncode == 0, result.stderr
+    assert "command not found" not in result.stderr
+    assert "SiteUrl" in result.stdout

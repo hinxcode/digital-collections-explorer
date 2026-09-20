@@ -6,6 +6,11 @@
 
 set -euo pipefail
 
+# Bash reads a script from disk while it runs. Without these braces, saving this file
+# during one of its long waits makes bash continue from the old position in the new
+# text and run whatever it finds there. The braces make it read everything up front.
+{
+
 fail() { echo "ERROR: $*" >&2; exit 1; }
 
 [ $# -ge 1 ] || fail "usage: destroy.sh NAME [--region REGION] [--yes]"
@@ -41,3 +46,6 @@ aws cloudformation delete-stack --region "$REGION" --stack-name "$STACK"
 echo "Deleting. This takes a few minutes..."
 aws cloudformation wait stack-delete-complete --region "$REGION" --stack-name "$STACK"
 echo "Everything created for $NAME has been removed. Billing for it has stopped."
+
+exit 0
+}

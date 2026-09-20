@@ -6,6 +6,11 @@
 
 set -euo pipefail
 
+# Bash reads a script from disk while it runs. Without these braces, saving this file
+# during one of its long waits makes bash continue from the old position in the new
+# text and run whatever it finds there. The braces make it read everything up front.
+{
+
 # Seconds to wait for the machine to answer the progress question.
 COMMAND_TIMEOUT=60
 
@@ -59,3 +64,6 @@ if curl -fsS -m 5 "$url/api/health" >/dev/null 2>&1; then
 else
     echo "Site is not up yet: $url"
 fi
+
+exit 0
+}

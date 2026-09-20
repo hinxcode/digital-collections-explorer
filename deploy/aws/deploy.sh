@@ -7,6 +7,11 @@
 
 set -euo pipefail
 
+# Bash reads a script from disk while it runs. Without these braces, saving this file
+# during one of its long waits makes bash continue from the old position in the new
+# text and run whatever it finds there. The braces make it read everything up front.
+{
+
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-us-west-2}}"
 SOURCE=""
@@ -173,3 +178,6 @@ aws cloudformation describe-stacks --region "$REGION" --stack-name "$STACK" \
 echo
 echo "The machine is now installing and indexing. The site opens when indexing finishes."
 echo "Follow progress with: deploy/aws/status.sh $NAME --region $REGION"
+
+exit 0
+}
