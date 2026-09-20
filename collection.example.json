@@ -1,0 +1,25 @@
+{
+  "title": "National Museum of American History",
+  "description": "Wander through objects and photographs from the Smithsonian's National Museum of American History, or describe what you are looking for in your own words.",
+  "source_name": "the Smithsonian",
+  "example_queries": [
+    "a patchwork quilt",
+    "a military uniform",
+    "a steam locomotive",
+    "people fishing",
+    "a sewing machine",
+    "an engraving of birds",
+    "a typewriter",
+    "something made of glass"
+  ],
+  "license": {
+    "name": "CC0 (public domain)",
+    "url": "https://www.si.edu/openaccess",
+    "note": "released through Smithsonian Open Access"
+  },
+  "links": [
+    { "label": "How this works (paper)", "url": "https://arxiv.org/abs/2507.00961" },
+    { "label": "Source code", "url": "https://github.com/hinxcode/digital-collections-explorer" },
+    { "label": "Smithsonian Open Access", "url": "https://www.si.edu/openaccess" }
+  ]
+}
