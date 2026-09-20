@@ -143,6 +143,22 @@ Build options:
 - `--build-arg PRELOAD_MODEL=false` leaves the model out of the image. It is then
   downloaded each time a container starts.
 
+## Describing Your Collection to Visitors
+
+The photographs site opens on a wall of images to wander through, suggests searches,
+shows each object once however many photos it has, and gives every image its own page
+with similar images and a link back to the institution's own record.
+
+Put a `collection.json` next to the index (in the folder you pass to `--data-dir`) to
+set the title, the introduction, the suggested searches, the licence and the footer
+links. `collection.example.json` shows every field. All of them are optional.
+
+The link back to the original record is taken from the catalog: a column named
+`source_url`, `guid`, `record_url`, `landing_page` or `permalink` that holds a web
+address. Images are grouped into objects by a column named `object_id`, `record_id`,
+`item_id` or `group_id`. Collections without a catalog still work: every image is
+then its own object and is shown as uncatalogued.
+
 ## Deploying to a Server or to AWS
 
 ### Any Linux machine

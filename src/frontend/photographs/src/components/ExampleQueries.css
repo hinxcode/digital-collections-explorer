@@ -1,0 +1,32 @@
+.example-queries {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 2rem;
+  max-width: 900px;
+}
+
+.example-queries-label {
+  margin-right: 0.25rem;
+  font-size: 0.9rem;
+  color: #9a9a9a;
+}
+
+.example-query {
+  padding: 0.35rem 0.85rem;
+  font-size: 0.9rem;
+  color: #d0b49f;
+  text-decoration: none;
+  border: 1px solid #4a4038;
+  border-radius: 999px;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.example-query:hover,
+.example-query:focus-visible {
+  color: #f8f5f0;
+  background-color: #8b5a2b;
+  border-color: #8b5a2b;
+}

@@ -1,205 +1,174 @@
 .search-bar {
   width: 100%;
-  max-width: 800px;
+  max-width: 760px;
   margin: 0 auto;
-  padding: 15px;
 }
 
-.search-bar form {
+.search-field {
   display: flex;
-  gap: 10px;
+  align-items: center;
+  margin: 0;
+  gap: 0.25rem;
+  padding: 0.3rem 0.3rem 0.3rem 1.3rem;
+  background-color: #1e1e1e;
+  border: 1px solid #3a3a3a;
+  border-radius: 999px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.search-field:focus-within {
+  border-color: #8b5a2b;
+  box-shadow: 0 0 0 3px rgba(139, 90, 43, 0.25);
+}
+
+.search-field-dragging {
+  border-color: #d0b49f;
+  border-style: dashed;
+}
+
+.search-field svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .search-input {
   flex: 1;
-  padding: 12px 15px;
-  border: 1px solid #333;
-  border-radius: 4px;
-  font-size: 1rem;
-  transition: border-color 0.3s;
-  background-color: #2c2c2c;
+  min-width: 0;
+  width: auto;
+  margin: 0;
+  padding: 0.6rem 0.5rem 0.6rem 0;
+  font-size: 1.05rem;
+  font-family: 'Lato', sans-serif;
   color: #f8f5f0;
+  background: transparent;
+  border: none;
+  outline: none;
 }
 
 .search-input::placeholder {
-  color: #999;
+  color: #7d7d7d;
 }
 
-.search-input:focus {
-  border-color: #6b4226;
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(107, 66, 38, 0.3);
+/* The browser's own clear button clashes with the dark field. */
+.search-input::-webkit-search-cancel-button {
+  display: none;
 }
 
-.search-bar .search-button {
+/* 44px is the smallest comfortable touch target on a phone. */
+.search-field-button,
+.search-submit {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  background-color: #8b5a2b;
-  color: white;
-  border: none;
-  padding: 0.75rem 1.5rem;
-  font-size: 1rem;
-  cursor: pointer;
-  border-radius: 4px;
-  transition: background-color 0.2s ease;
-}
-
-.search-bar .search-button:hover {
-  background-color: #444;
-}
-
-.search-bar .search-button:disabled {
-  background-color: #555;
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
-.search-icon {
-  font-size: 1.2rem;
-}
-
-.search-suggestions {
-  margin-top: 12px;
-  text-align: center;
-  font-size: 0.9rem;
-  color: #b0b0b0;
-}
-
-.search-mode-selector {
-  display: flex;
-  margin-bottom: 15px;
-  border-bottom: 1px solid #333;
-}
-
-.mode-button {
-  background: none;
-  border: none;
-  padding: 10px 20px;
-  cursor: pointer;
-  font-size: 0.95rem;
-  color: #b0b0b0;
-  position: relative;
-  transition: color 0.2s;
-}
-
-.mode-button:hover {
-  color: #d0b49f;
-  background-color: transparent;
-}
-
-.mode-button.active {
-  color: #d0b49f;
-  font-weight: 500;
-}
-
-.mode-button.active::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background-color: #8b5a2b;
-  border-radius: 3px 3px 0 0;
-}
-
-.image-search-container {
-  flex: 1;
-  display: flex;
-  gap: 10px;
-}
-
-.image-upload {
-  flex: 1;
-  position: relative;
-  border: 2px dashed #444;
-  border-radius: 4px;
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  transition: border-color 0.3s;
-  background-color: #2c2c2c;
-}
-
-.image-upload:hover {
-  border-color: #8b5a2b;
-}
-
-.image-input {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-}
-
-.image-upload-label {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  color: #b0b0b0;
-  font-size: 0.9rem;
-  padding: 10px;
-  text-align: center;
-}
-
-.upload-icon {
-  font-size: 1.5rem;
-  margin-bottom: 5px;
-}
-
-.image-preview-container {
-  flex: 1;
-  position: relative;
-  border-radius: 4px;
-  overflow: hidden;
-  border: 1px solid #444;
-  background-color: #2c2c2c;
-}
-
-.image-preview {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  max-height: 100px;
-}
-
-.clear-image-button {
-  position: absolute;
-  top: 5px;
-  right: 5px;
-  background-color: rgba(0, 0, 0, 0.6);
-  color: #ddd;
-  border: 1px solid #444;
+  width: 44px;
+  height: 44px;
+  padding: 0;
   border-radius: 50%;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 0.8rem;
-  transition: background-color 0.2s;
 }
 
-.clear-image-button:hover {
-  background-color: rgba(0, 0, 0, 0.8);
-  color: #fff;
+.search-submit {
+  color: #8a8a8a;
+  background-color: #2a2a2a;
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.search-submit:hover {
+  background-color: #333;
+}
+
+/* The button lights up once there is something to search for. */
+.search-submit-ready {
+  color: #f8f5f0;
+  background-color: #8b5a2b;
+}
+
+.search-submit-ready:hover,
+.search-submit-ready:focus-visible {
+  background-color: #a06a35;
+}
+
+.search-field-button {
+  color: #b0b0b0;
+  background: none;
+  border-radius: 50%;
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.search-field-button:hover,
+.search-field-button:focus-visible {
+  color: #f8f5f0;
+  background-color: #2e2e2e;
 }
 
 @media (max-width: 600px) {
-  .search-bar form {
-    flex-direction: column;
+  .search-field {
+    padding-left: 1rem;
   }
-  
-  .search-bar .search-button {
-    width: 100%;
-    padding: 12px;
+
+  .search-input {
+    font-size: 1rem;
   }
+}
+
+.search-file-input {
+  display: none;
+}
+
+.search-hint {
+  margin: 0.7rem 0 0;
+  font-size: 0.9rem;
+  color: #d0b49f;
+}
+
+.search-image-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-top: 0.9rem;
+  padding: 0.3rem 0.4rem 0.3rem 0.3rem;
+  font-size: 0.9rem;
+  color: #d8d2c8;
+  background-color: #1e1e1e;
+  border: 1px solid #3a3a3a;
+  border-radius: 999px;
+}
+
+.search-image-chip img {
+  width: 34px;
+  height: 34px;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.search-image-chip button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: #9a9a9a;
+  background: none;
+  border-radius: 50%;
+}
+
+.search-image-chip button:hover {
+  color: #f8f5f0;
+  background-color: #2e2e2e;
+}
+
+.search-image-chip svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
 }

@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from .api.routes import embeddings, images, search
+from .api.routes import browse, embeddings, images, search
 from .core.config import settings
 from .services.embedding_service import embedding_service
 from .services.index_info import describe_mismatch
@@ -74,6 +74,7 @@ app.add_middleware(
 )
 
 app.include_router(search.router)
+app.include_router(browse.router)
 app.include_router(images.router)
 app.include_router(embeddings.router)
 

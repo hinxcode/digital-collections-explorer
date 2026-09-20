@@ -35,7 +35,7 @@ export const searchByImage = async (image, limit = 50, page = 1) => {
   try {
     const formData = new FormData();
     formData.append('image', image);
-    formData.append('resultsPerPage', limit);
+    formData.append('limit', limit);
     formData.append('page', page);
 
     const response = await fetch(`${API_URL}/api/search/image`, {
@@ -73,4 +73,49 @@ export const getEmbeddingStats = async () => {
     console.error('Error fetching embedding stats:', error);
     throw error;
   }
+};
+
+const getJson = async (path) => {
+  const response = await fetch(`${API_URL}${path}`);
+
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`);
+  }
+
+  return response.json();
+};
+
+/**
+ * Describe the collection: title, size, suggested searches, licence and links
+ * @returns {Promise<Object>}
+ */
+export const getCollection = () => getJson('/api/collection');
+
+/**
+ * Get a varied handful of images to start wandering from, one per object
+ * @param {number} limit - How many images
+ * @param {number} seed - The same seed always gives the same order
+ * @param {number} offset - Continue the same order further on, without repeats
+ * @returns {Promise<{results: Array, has_more: boolean}>}
+ */
+export const getSample = (limit, seed, offset = 0) => (
+  getJson(`/api/items/sample?limit=${limit}&seed=${seed}&offset=${offset}`)
+);
+
+/**
+ * Get one image, with the other images of the same object
+ * @param {string} id - The item ID
+ * @returns {Promise<Object>}
+ */
+export const getItem = (id) => getJson(`/api/items/${encodeURIComponent(id)}`);
+
+/**
+ * Get images of other objects that look most like this one
+ * @param {string} id - The item ID
+ * @param {number} limit - How many images
+ * @returns {Promise<Array>}
+ */
+export const getSimilar = async (id, limit = 24) => {
+  const { results } = await getJson(`/api/items/${encodeURIComponent(id)}/similar?limit=${limit}`);
+  return results;
 };

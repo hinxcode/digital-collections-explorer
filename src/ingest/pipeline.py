@@ -14,6 +14,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageFile
 
+from src.backend.services.catalog_fields import object_id_from, source_url_from
 from src.profiling.sources import FileRef, Source
 
 from .state import IngestState, Result
@@ -206,6 +207,8 @@ def decode_worker(
             catalog = item.ref.extra.get("row")
             if catalog:
                 item.metadata["catalog"] = catalog
+                item.metadata["object_id"] = object_id_from(catalog)
+                item.metadata["source_url"] = source_url_from(catalog)
                 for shown_by_frontend in ("title", "description"):
                     if catalog.get(shown_by_frontend):
                         item.metadata[shown_by_frontend] = str(

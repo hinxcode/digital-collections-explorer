@@ -1,0 +1,28 @@
+.site-footer {
+  margin-top: 4rem;
+  padding: 2rem 2rem 3rem;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: #9a9a9a;
+  text-align: center;
+  border-top: 1px solid #2a2a2a;
+}
+
+.site-footer p {
+  max-width: 760px;
+  margin: 0 auto 1rem;
+}
+
+.site-footer ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.site-footer a {
+  color: #d0b49f;
+}

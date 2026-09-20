@@ -99,6 +99,12 @@ class EmbeddingService:
 
         return None
 
+    def similarity_scores(self, query_embedding: torch.Tensor) -> torch.Tensor:
+        """Raw similarity of every item to the query, which is what ranking uses"""
+        if not self.is_loaded:
+            self.load_embeddings()
+        return torch.matmul(self.embeddings, query_embedding.t()).squeeze()
+
     def search(
         self,
         query_embedding: torch.Tensor,
@@ -108,12 +114,14 @@ class EmbeddingService:
     ) -> List[Dict[str, Any]]:
         """Search by query embedding; optional score_transform on raw similarities."""
         try:
+            # Rank on the raw similarity. A transform such as SigLIP's sigmoid
+            # saturates at 1.0 for image queries, which would make everything tie.
             scores = torch.matmul(self.embeddings, query_embedding.t()).squeeze()
-            if score_transform is not None:
-                scores = score_transform(scores)
 
             top_k = min(offset + limit, len(scores))
             top_scores, top_indices = torch.topk(scores, k=top_k)
+            if score_transform is not None:
+                top_scores = score_transform(top_scores)
 
             start_idx = min(offset, len(top_indices))
             end_idx = min(offset + limit, len(top_indices))
