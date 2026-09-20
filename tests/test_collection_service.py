@@ -104,3 +104,20 @@ def test_a_saturating_score_transform_does_not_scramble_the_ranking(service):
     results = service.ranked(raw, limit=10, score_transform=saturating)
     assert [r["id"] for r in results] == ["rifle", "loose-photo", "quilt-front"]
     assert all(r["score"] == 1.0 for r in results)
+
+
+def test_legacy_search_also_ranks_on_raw_similarity(service):
+    embeddings = service.embeddings
+    query = embeddings.embeddings[2:3]
+    found = embeddings.search(
+        query, score_transform=lambda s: torch.ones_like(s), limit=1
+    )
+    assert found[0]["id"] == "rifle"
+
+
+def test_asking_for_more_continues_without_repeating(service):
+    first = service.sample(limit=2, seed=5, offset=0)
+    second = service.sample(limit=2, seed=5, offset=2)
+    seen = [r["object_id"] for r in first + second]
+    assert len(seen) == len(set(seen)) == 3
+    assert service.sample(limit=2, seed=5, offset=4) == []
