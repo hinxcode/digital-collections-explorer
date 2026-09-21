@@ -131,6 +131,9 @@ function ItemDetail({ id, collection, canGoBack }) {
   const sourceName = collection?.source_name || (sourceUrl && hostnameOf(sourceUrl));
   const license = collection?.license;
   const hasSeveralPhotos = photos.length > 1;
+  const aspectRatio = metadata.width && metadata.height
+    ? metadata.width / metadata.height
+    : undefined;
 
   return (
     <article className={`item-detail ${isLoading ? 'item-detail-loading' : ''}`}>
@@ -149,7 +152,7 @@ function ItemDetail({ id, collection, canGoBack }) {
 
       <div className="item-detail-main">
         <div className="item-detail-viewer">
-          <div className="item-detail-stage">
+          <div className="item-detail-stage" style={{ '--ratio': aspectRatio }}>
             <button
               type="button"
               className="item-detail-image"
