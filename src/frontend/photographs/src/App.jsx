@@ -13,11 +13,12 @@ const WALL_SIZE = 60;
 const RESULTS_PER_PAGE = 48;
 
 function App() {
-  const [route, navigate] = useHashRoute();
+  const [route, navigate, canGoBack] = useHashRoute();
   const [collection, setCollection] = useState(null);
   const [wall, setWall] = useState([]);
   const [wallHasMore, setWallHasMore] = useState(false);
   const [wallIsLoading, setWallIsLoading] = useState(false);
+  const [wallFailed, setWallFailed] = useState(false);
   const wallSeed = useRef(Math.floor(Math.random() * 1e9));
   const [results, setResults] = useState([]);
   const [hasMore, setHasMore] = useState(false);
@@ -41,20 +42,24 @@ function App() {
 
   const extendWall = useCallback(() => {
     setWallIsLoading(true);
+    setWallFailed(false);
     getSample(WALL_SIZE, wallSeed.current, wall.length)
       .then(({ results: more, has_more: hasMoreImages }) => {
         setWall((shown) => [...shown, ...more]);
         setWallHasMore(hasMoreImages);
       })
-      .catch((loadError) => console.error('Failed to load images:', loadError))
+      .catch((loadError) => {
+        console.error('Failed to load images:', loadError);
+        setWallFailed(true);
+      })
       .finally(() => setWallIsLoading(false));
   }, [wall.length]);
 
   useEffect(() => {
-    if (route.name === 'home' && wall.length === 0 && !wallIsLoading) {
+    if (route.name === 'home' && wall.length === 0 && !wallIsLoading && !wallFailed) {
       extendWall();
     }
-  }, [route.name, wall.length, wallIsLoading, extendWall]);
+  }, [route.name, wall.length, wallIsLoading, wallFailed, extendWall]);
 
   useEffect(() => {
     const isTextSearch = route.name === 'search';
@@ -171,7 +176,15 @@ function App() {
                 <p>A random selection. Select any image to see it larger and find similar ones.</p>
               </div>
               <ImageGrid items={wall} />
-              {wallHasMore && (
+              {wallFailed && (
+                <div className="wall-more">
+                  <p>The images could not be loaded.</p>
+                  <button type="button" onClick={extendWall} disabled={wallIsLoading}>
+                    Try again
+                  </button>
+                </div>
+              )}
+              {wallHasMore && !wallFailed && (
                 <div className="wall-more">
                   <button type="button" onClick={extendWall} disabled={wallIsLoading}>
                     {wallIsLoading ? 'Loading…' : 'Show me more'}
@@ -194,7 +207,9 @@ function App() {
           />
         )}
 
-        {route.name === 'item' && <ItemDetail id={route.id} collection={collection} />}
+        {route.name === 'item' && (
+          <ItemDetail id={route.id} collection={collection} canGoBack={canGoBack} />
+        )}
       </main>
 
       <SiteFooter collection={collection} />

@@ -27,7 +27,13 @@ const Chevron = ({ direction }) => (
   </svg>
 );
 
-function ItemDetail({ id, collection }) {
+const ExternalLinkIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M14 5h5v5M19 5l-8 8M11 7H6a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-5" />
+  </svg>
+);
+
+function ItemDetail({ id, collection, canGoBack }) {
   const [object, setObject] = useState(null);
   const [currentId, setCurrentId] = useState(id);
   const [similar, setSimilar] = useState([]);
@@ -77,7 +83,7 @@ function ItemDetail({ id, collection }) {
 
   const showPhoto = useCallback((photoId) => {
     setCurrentId(photoId);
-    window.history.replaceState(null, '', itemHref(photoId));
+    window.history.replaceState(window.history.state, '', itemHref(photoId));
   }, []);
 
   const step = useCallback((offset) => {
@@ -129,10 +135,16 @@ function ItemDetail({ id, collection }) {
   return (
     <article className={`item-detail ${isLoading ? 'item-detail-loading' : ''}`}>
       <nav className="item-detail-nav">
-        <button type="button" className="link-button" onClick={() => window.history.back()}>
-          ← Back
-        </button>
-        <a href="#/">Start over</a>
+        {canGoBack ? (
+          <>
+            <button type="button" className="link-button" onClick={() => window.history.back()}>
+              ← Back
+            </button>
+            <a href="#/">Start over</a>
+          </>
+        ) : (
+          <a href="#/">← Browse the collection</a>
+        )}
       </nav>
 
       <div className="item-detail-main">
@@ -209,7 +221,8 @@ function ItemDetail({ id, collection }) {
 
           {sourceUrl && (
             <a className="item-detail-source" href={sourceUrl} target="_blank" rel="noopener noreferrer">
-              View the full record at {sourceName} ↗
+              <span>View the full record at {sourceName}</span>
+              <ExternalLinkIcon />
             </a>
           )}
 
