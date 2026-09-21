@@ -17,6 +17,8 @@ LIMIT=""
 PORT="8000"
 KEEP_DATA="false"
 AS_JSON="false"
+COLLECTION_FILE=""
+COLLECTION_BASE64=""
 IMAGE_WAS_GIVEN="false"
 
 # The container runs as this user id, so the data folder must belong to it.
@@ -24,7 +26,7 @@ CONTAINER_UID=1000
 
 usage() {
     cat <<'EOF'
-Usage: bootstrap.sh <install|status|update|uninstall> --name NAME [options]
+Usage: bootstrap.sh <install|status|describe|update|uninstall> --name NAME [options]
 
 install options:
   --source SRC        a folder, s3://bucket/prefix, or a .parquet manifest (required)
@@ -35,9 +37,13 @@ install options:
   --image IMAGE       container image to run
   --image-tar FILE    load the image from a file instead of downloading it
   --data-root DIR     where collections are stored (default /opt/dce)
+  --collection-file FILE  the collection.json that describes the collection to visitors
 
 status options:
   --json              print the full report as JSON
+
+describe options:
+  --collection-file FILE  replace the collection.json of a running site. No restart needed.
 
 update options:
   --image IMAGE       switch the site to this image. The index is kept.
@@ -67,6 +73,8 @@ parse_args() {
         --data-root) DATA_ROOT="$2"; shift 2 ;;
         --keep-data) KEEP_DATA="true"; shift ;;
         --json) AS_JSON="true"; shift ;;
+        --collection-file) COLLECTION_FILE="$2"; shift 2 ;;
+        --collection-base64) COLLECTION_BASE64="$2"; shift 2 ;;
         -h | --help) usage; exit 0 ;;
         *) fail "unknown option: $1" ;;
         esac
@@ -180,13 +188,33 @@ EOF
     fi
 }
 
+place_description() {
+    local image="$1" incoming="$COLLECTION_DIR/.collection.json.incoming"
+    if [ -n "$COLLECTION_BASE64" ]; then
+        echo "$COLLECTION_BASE64" | base64 -d >"$incoming" ||
+            { rm -f "$incoming"; fail "the collection description did not arrive intact"; }
+    else
+        cp "$COLLECTION_FILE" "$incoming"
+    fi
+    if ! docker run --rm -i "$image" python -c \
+        "import json, sys; assert isinstance(json.load(sys.stdin), dict)" <"$incoming" >/dev/null 2>&1; then
+        rm -f "$incoming"
+        fail "the collection description is not a JSON object. See collection.example.json."
+    fi
+    chmod 644 "$incoming"
+    mv "$incoming" "$COLLECTION_DIR/collection.json"
+    say "Visitors now see the description in $COLLECTION_DIR/collection.json"
+}
+
 do_install() {
     [ -n "$SOURCE" ] || fail "--source is required"
+    [ -z "$COLLECTION_FILE" ] || [ -f "$COLLECTION_FILE" ] || fail "file not found: $COLLECTION_FILE"
     [ "$(id -u)" -eq 0 ] || fail "run this with sudo"
     install_docker
     fetch_image
     resolve_source
     mkdir -p "$COLLECTION_DIR"
+    [ -z "$COLLECTION_FILE" ] || place_description "$IMAGE"
     chown -R "$CONTAINER_UID:$CONTAINER_UID" "$COLLECTION_DIR"
     write_runner
     start_service
@@ -218,6 +246,14 @@ do_status() {
     else
         echo "Site: not running yet"
     fi
+}
+
+do_describe() {
+    [ -n "$COLLECTION_FILE" ] || [ -n "$COLLECTION_BASE64" ] || fail "--collection-file is required"
+    [ -z "$COLLECTION_FILE" ] || [ -f "$COLLECTION_FILE" ] || fail "file not found: $COLLECTION_FILE"
+    [ -f "$RUNNER" ] || fail "no collection named $NAME in $DATA_ROOT"
+    [ -w "$COLLECTION_DIR" ] || fail "run this with sudo"
+    place_description "$(image_in_use)"
 }
 
 image_in_use() { grep -oE '"[^"]+" (ingest|serve)' "$RUNNER" | head -1 | cut -d'"' -f2; }
@@ -261,6 +297,7 @@ parse_args "$@"
 case "$ACTION" in
 install) do_install ;;
 status) do_status ;;
+describe) do_describe ;;
 update) do_update ;;
 uninstall) do_uninstall ;;
 *) usage; exit 1 ;;

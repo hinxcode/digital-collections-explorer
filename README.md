@@ -151,7 +151,9 @@ with similar images and a link back to the institution's own record.
 
 Put a `collection.json` next to the index (in the folder you pass to `--data-dir`) to
 set the title, the introduction, the suggested searches, the licence and the footer
-links. `collection.example.json` shows every field. All of them are optional.
+links. `collection.example.json` shows every field. All of them are optional. The site
+reads the file on every visit, so a change shows up without a restart. For a deployed
+site, see `--collection-file` and `describe` below.
 
 The link back to the original record is taken from the catalog: a column named
 `source_url`, `guid`, `record_url`, `landing_page` or `permalink` that holds a web
@@ -175,6 +177,14 @@ sudo deploy/bootstrap.sh uninstall --name my-collection   # add --keep-data to k
 ```
 
 Indexing can be interrupted. It continues where it left off the next time the machine starts.
+
+Add `--collection-file collection.json` to `install` to give the site its title,
+introduction and suggested searches from the start. To change them later, while the
+site keeps running:
+
+```bash
+sudo deploy/bootstrap.sh describe --name my-collection --collection-file collection.json
+```
 
 ### AWS
 
@@ -206,6 +216,13 @@ files that failed, the cost of the run at current AWS prices, the cost per 1,000
 and what the machine costs per month from now on. It warns when a large machine is
 still running after indexing has finished. Locally, `python -m src.ingest --report
 --data-dir ...` prints the same report, also for a run that finished long ago.
+
+`deploy.sh` takes the same `--collection-file collection.json`. To change the
+description of a site that is already deployed, without touching the machine or the index:
+
+```bash
+deploy/aws/describe.sh my-collection --file collection.json
+```
 
 To move a deployed site to a newer version without indexing again:
 

@@ -194,6 +194,16 @@ summary. Then confirm search works before telling the person it is ready:
 curl -s "http://localhost:8000/api/search/text?query=a%20portrait&limit=3"
 ```
 
+### Describe the collection to visitors
+
+Until a `collection.json` sits in `data/collections/NAME/`, the site shows a generic
+title and no suggested searches. Write one with the person, starting from
+`collection.example.json`: the title, one or two sentences of introduction, the name
+of the institution, the licence, and six to eight example searches. Only suggest
+searches you have run and that return good results. The site reads the file on every
+visit, so no restart is needed. On a deployed site, deliver it with
+`deploy/bootstrap.sh describe` or `deploy/aws/describe.sh NAME --file collection.json`.
+
 ## Step 7. Tell the person how it went
 
 People have to account for their time and money. When indexing has finished, tell

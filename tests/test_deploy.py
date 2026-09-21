@@ -1,5 +1,8 @@
+import base64
 import importlib.util
+import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -31,7 +34,13 @@ def test_estimate_never_shows_a_total_it_cannot_back_up(estimate_cost):
 
 @pytest.mark.parametrize(
     "script",
-    ["deploy/bootstrap.sh", "deploy/aws/deploy.sh", "deploy/aws/status.sh"],
+    [
+        "deploy/bootstrap.sh",
+        "deploy/aws/deploy.sh",
+        "deploy/aws/status.sh",
+        "deploy/aws/update.sh",
+        "deploy/aws/describe.sh",
+    ],
 )
 def test_scripts_parse_and_explain_themselves(script):
     path = ROOT / script
@@ -63,18 +72,23 @@ echo "$*" >> "$FAKE_AWS_LOG"
 case "$*" in
 *"sts get-caller-identity"*) echo "123456789012" ;;
 *"describe-stacks"*"InstanceId"*)
-    [ "$FAKE_STACK_EXISTS" = "true" ] || exit 255
+    [ "$FAKE_STACK_EXISTS" = "true" ] || grep -q "cloudformation deploy" "$FAKE_AWS_LOG" || exit 255
     echo "i-0existing" ;;
 *"describe-stacks"*"DiskSizeGiB"*) echo "40" ;;
 *"describe-instances"*"InstanceType"*) echo "c7i.2xlarge" ;;
 *"describe-instances"*) echo "ami-0existing111" ;;
 *"ssm send-command"*)
+    if [ "$(grep -c "ssm send-command" "$FAKE_AWS_LOG")" -le "${FAKE_NOT_READY_FOR:-0}" ]; then
+        exit 255
+    fi
     echo "$*" > "$FAKE_AWS_LOG.last_command"
     echo "command-1" ;;
 *"ssm get-command-invocation"*)
     if grep -q -- "--json" "$FAKE_AWS_LOG.last_command"; then
         [ "$FAKE_MACHINE" = "current" ] || { printf 'Failed\t'; exit 0; }
         printf 'Success\t{"indexed": 3, "run": {"active_seconds": 60}}'
+    elif grep -q "describe --name" "$FAKE_AWS_LOG.last_command" && [ "$FAKE_MACHINE" = "old" ]; then
+        printf 'Failed\tUsage: bootstrap.sh <install|status|update|uninstall>'
     else
         printf 'Success\tIndexing: finished'
     fi ;;
@@ -100,8 +114,14 @@ def fake_deploy(tmp_path):
     fake_bin.mkdir()
     (fake_bin / "aws").write_text(FAKE_AWS)
     (fake_bin / "aws").chmod(0o755)
-    (fake_bin / "python3").write_text("#!/usr/bin/env bash\necho '  (cost estimate)'\n")
+    (fake_bin / "python3").write_text(
+        "#!/usr/bin/env bash\n"
+        f'[ "$1" = "-c" ] && exec {sys.executable} "$@"\n'
+        "echo '  (cost estimate)'\n"
+    )
     (fake_bin / "python3").chmod(0o755)
+    (fake_bin / "sleep").write_text("#!/usr/bin/env bash\n")
+    (fake_bin / "sleep").chmod(0o755)
     log = tmp_path / "aws.log"
 
     def run(
@@ -110,6 +130,7 @@ def fake_deploy(tmp_path):
         overwrite_while_running=False,
         script="deploy.sh",
         machine="current",
+        not_ready_for=0,
     ):
         import os
 
@@ -123,10 +144,12 @@ def fake_deploy(tmp_path):
                 str(scripts / "deploy.sh") if overwrite_while_running else ""
             ),
             "FAKE_MACHINE": machine,
+            "FAKE_NOT_READY_FOR": str(not_ready_for),
         }
         if script != "deploy.sh":
             command = ["bash", str(scripts / script), "demo", *extra]
-            return subprocess.run(command, capture_output=True, text=True, env=env), []
+            result = subprocess.run(command, capture_output=True, text=True, env=env)
+            return result, log.read_text().splitlines()
         command = ["bash", str(scripts / "deploy.sh"), "demo", "--yes"]
         command += ["--source", "s3://bucket/images", "--disk-gib", "40", *extra]
         result = subprocess.run(command, capture_output=True, text=True, env=env)
@@ -236,3 +259,138 @@ def test_update_refreshes_the_bootstrap_script_before_switching_images(fake_depl
     result, _ = fake_deploy(True, "--image", "example/image:2", script="update.sh")
     assert result.returncode == 0, result.stderr
     assert "The index and the address are kept" in result.stdout
+
+
+DESCRIPTION = {"title": "Demo Museum", "example_queries": ["a quilt"]}
+
+
+@pytest.fixture()
+def description(tmp_path):
+    path = tmp_path / "collection.json"
+    path.write_text(json.dumps(DESCRIPTION))
+    return path
+
+
+def sent_description(calls):
+    command = [c for c in calls if "ssm send-command" in c][-1]
+    encoded = command.split("--collection-base64 ")[1].split('"')[0]
+    return json.loads(base64.b64decode(encoded))
+
+
+def test_describe_sends_the_file_to_the_machine(fake_deploy, description):
+    result, calls = fake_deploy(True, "--file", str(description), script="describe.sh")
+    assert result.returncode == 0, result.stderr
+    assert sent_description(calls) == DESCRIPTION
+    assert "describe --name demo" in calls[-2]
+
+
+def test_describe_keeps_trying_while_a_new_machine_starts_up(fake_deploy, description):
+    result, calls = fake_deploy(
+        True, "--file", str(description), script="describe.sh", not_ready_for=3
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.count("not ready for it yet") == 3
+    assert sent_description(calls) == DESCRIPTION
+
+
+def test_describe_stops_at_once_when_the_machine_rejects_the_file(
+    fake_deploy, description
+):
+    result, calls = fake_deploy(
+        True, "--file", str(description), script="describe.sh", machine="old"
+    )
+    assert result.returncode != 0
+    assert "Usage: bootstrap.sh" in result.stderr
+    assert "keeps its previous description" in result.stderr
+    assert len([c for c in calls if "ssm send-command" in c]) == 1
+
+
+def test_describe_refuses_a_file_that_is_not_a_json_object(fake_deploy, tmp_path):
+    broken = tmp_path / "broken.json"
+    broken.write_text('{"title": ')
+    result, calls = fake_deploy(True, "--file", str(broken), script="describe.sh")
+    assert result.returncode != 0
+    assert "not a JSON object" in result.stderr
+    assert not any("ssm send-command" in c for c in calls)
+
+
+def test_deploy_delivers_the_description_once_the_machine_exists(
+    fake_deploy, description, tmp_path
+):
+    result, deploys = fake_deploy(False, "--collection-file", str(description))
+    assert result.returncode == 0, result.stderr
+    assert len(deploys) == 1
+    calls = (tmp_path / "aws.log").read_text().splitlines()
+    assert sent_description(calls) == DESCRIPTION
+    assert "Visitors see the new description" in result.stdout
+
+
+def test_deploy_creates_nothing_when_the_description_is_broken(fake_deploy, tmp_path):
+    broken = tmp_path / "broken.json"
+    broken.write_text("[]")
+    result, deploys = fake_deploy(False, "--collection-file", str(broken))
+    assert result.returncode != 0
+    assert deploys == []
+    assert "Nothing was changed" in result.stderr
+
+
+FAKE_DOCKER = """#!/usr/bin/env bash
+shift 5
+exec {python} "$@"
+"""
+
+
+@pytest.fixture()
+def installed_collection(tmp_path):
+    import os
+
+    data_root = tmp_path / "dce"
+    (data_root / "collections" / "demo").mkdir(parents=True)
+    (data_root / "run-demo.sh").write_text('docker run "example/image:1" serve\n')
+    fake_bin = tmp_path / "docker-bin"
+    fake_bin.mkdir()
+    (fake_bin / "docker").write_text(FAKE_DOCKER.format(python=sys.executable))
+    (fake_bin / "docker").chmod(0o755)
+    env = {**os.environ, "PATH": f"{fake_bin}:{os.environ['PATH']}"}
+
+    def run(name, *flags):
+        command = ["bash", str(ROOT / "deploy/bootstrap.sh"), "describe"]
+        command += ["--name", name, "--data-root", str(data_root), *flags]
+        return subprocess.run(command, capture_output=True, text=True, env=env)
+
+    return run, data_root / "collections" / "demo" / "collection.json"
+
+
+def test_bootstrap_describe_replaces_the_description_of_a_running_site(
+    installed_collection, description
+):
+    run, placed = installed_collection
+    encoded = base64.b64encode(description.read_bytes()).decode()
+    result = run("demo", "--collection-base64", encoded)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(placed.read_text()) == DESCRIPTION
+    assert placed.stat().st_mode & 0o004, "the container user must be able to read it"
+    assert [p.name for p in placed.parent.iterdir()] == ["collection.json"]
+
+
+def test_bootstrap_describe_keeps_the_old_description_when_the_new_one_is_broken(
+    installed_collection, description, tmp_path
+):
+    run, placed = installed_collection
+    assert run("demo", "--collection-file", str(description)).returncode == 0
+    broken = tmp_path / "broken.json"
+    broken.write_text("not json")
+    result = run("demo", "--collection-file", str(broken))
+    assert result.returncode != 0
+    assert "not a JSON object" in result.stderr
+    assert json.loads(placed.read_text()) == DESCRIPTION
+    assert [p.name for p in placed.parent.iterdir()] == ["collection.json"]
+
+
+def test_bootstrap_describe_refuses_a_collection_that_is_not_installed(
+    installed_collection, description
+):
+    run, _ = installed_collection
+    result = run("other", "--collection-file", str(description))
+    assert result.returncode != 0
+    assert "no collection named other" in result.stderr
