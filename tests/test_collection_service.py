@@ -104,6 +104,14 @@ def test_collection_file_overrides_defaults(service, tmp_path, monkeypatch):
     assert set(info["index"]) == {"model_name", "built_at"}
 
 
+def test_a_description_that_is_not_an_object_is_ignored(service, tmp_path, monkeypatch):
+    from src.backend.services import collection_service as module
+
+    (tmp_path / "collection.json").write_text("[1, 2, 3]")
+    monkeypatch.setattr(module.settings, "data_dir", str(tmp_path))
+    assert service.info()["images"] == 4
+
+
 def test_a_saturating_score_transform_does_not_scramble_the_ranking(service):
     saturating = lambda scores: torch.ones_like(scores)  # noqa: E731
     raw = torch.tensor([0.31, 0.30, 0.99, 0.32])

@@ -80,7 +80,7 @@ class CollectionService:
         if settings.data_dir and path.exists():
             try:
                 described.update(json.loads(path.read_text()))
-            except (OSError, ValueError) as e:
+            except (OSError, ValueError, TypeError) as e:
                 logger.warning(f"Ignoring unreadable {path}: {e}")
         described["images"] = self.indexed_count
         described["objects"] = len(self.members)
