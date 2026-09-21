@@ -219,17 +219,26 @@ deploy/aws/status.sh my-collection
 deploy/aws/destroy.sh my-collection     # removes everything it created
 ```
 
+To change a deployment, run `deploy.sh` again with the same name and only the options
+you want to change. Everything you leave out keeps its current value, and the script
+lists what will change before it asks you to confirm.
+
 Indexing is the only heavy work, so it pays to index on a large machine and serve from a
-small one. Run `deploy.sh` again with the same name and a different `--instance-type`:
-the machine restarts as the new type and keeps its index and its address. The script
-never lets an update replace the machine, which would delete the index: it keeps the
-machine's operating system image fixed and refuses to change the disk size.
+small one. Changing `--instance-type` restarts the machine as the new type and keeps its
+index and its address.
 
 ```bash
 deploy/aws/deploy.sh my-collection --source s3://bucket/prefix --anonymous --instance-type c7i.2xlarge
 # ...once status.sh reports that indexing has finished:
-deploy/aws/deploy.sh my-collection --source s3://bucket/prefix --anonymous --instance-type t3.medium
+deploy/aws/deploy.sh my-collection --instance-type t3.medium
 ```
+
+The script never lets an update replace the machine, which would delete the index: it
+keeps the machine's operating system image fixed and refuses to change the disk size.
+It also refuses to change the options that only matter when a machine is first created
+(`--source`, `--fetch-via`, `--anonymous`, `--limit`, `--image`, `--bootstrap-url`),
+because that would restart the machine and change nothing. To switch a running site to
+another version, use `update.sh` below.
 
 `status.sh` reports how the run went and what it cost: when indexing started and
 finished, how long it took, images per second, how much was read from the source, the
@@ -249,12 +258,11 @@ To open the site to the public, add `--https`. The site then gets an `https://` 
 from CloudFront, with no domain name or certificate to arrange, and the machine stops
 accepting traffic from anywhere else. CloudFront also keeps copies of the images, which
 takes most of the load off a small machine. It is free up to 1 TB and 10 million requests
-a month. Once a deployment uses `--https`, pass it on every later `deploy.sh` run;
-`--no-https` turns it off again. `--https` cannot be combined with `--allowed-cidr`,
-which is for sites that should stay internal.
+a month. `--no-https` turns it off again. `--https` cannot be combined with
+`--allowed-cidr`, which is for sites that should stay internal.
 
 ```bash
-deploy/aws/deploy.sh my-collection --source s3://bucket/prefix --anonymous --https
+deploy/aws/deploy.sh my-collection --https
 ```
 
 To move a deployed site to a newer version without indexing again:
