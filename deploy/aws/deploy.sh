@@ -21,6 +21,7 @@ EMAIL=""
 IMAGE=""
 BOOTSTRAP_URL=""
 COLLECTION_FILE=""
+HTTPS=""
 ASSUME_YES="false"
 
 usage() {
@@ -37,6 +38,8 @@ Usage: deploy.sh NAME --source SRC [options]
   --disk-gib N          default 30
   --region REGION       default us-west-2, or AWS_REGION
   --allowed-cidr CIDR   who may open the site (default: everyone)
+  --https               open the site to everyone over HTTPS, through CloudFront
+  --no-https            go back to plain HTTP on the machine's own address
   --budget USD          email an alert when the monthly bill passes this amount
   --email ADDRESS       where to send that alert
   --image IMAGE         container image to run
@@ -63,6 +66,8 @@ while [ $# -gt 0 ]; do
     --disk-gib) DISK_GIB="$2"; shift 2 ;;
     --region) REGION="$2"; shift 2 ;;
     --allowed-cidr) ALLOWED_CIDR="$2"; shift 2 ;;
+    --https) HTTPS="true"; shift ;;
+    --no-https) HTTPS="false"; shift ;;
     --budget) BUDGET="$2"; shift 2 ;;
     --email) EMAIL="$2"; shift 2 ;;
     --image) IMAGE="$2"; shift 2 ;;
@@ -100,8 +105,14 @@ if [ -n "$EXISTING_INSTANCE" ] && [ "$EXISTING_INSTANCE" != "None" ]; then
     if [ "$CURRENT_DISK" != "$DISK_GIB" ]; then
         fail "this deployment has a $CURRENT_DISK GB disk. Changing it to $DISK_GIB GB would replace the machine and delete its index. Run again with --disk-gib $CURRENT_DISK."
     fi
+    CURRENT_HTTPS="$(aws cloudformation describe-stacks --region "$REGION" --stack-name "$STACK" \
+        --query "Stacks[0].Parameters[?ParameterKey=='PublicHttps'].ParameterValue" --output text)"
+    if [ "$CURRENT_HTTPS" = "true" ] && [ -z "$HTTPS" ]; then
+        fail "this deployment is served over HTTPS. Leaving that out would take its https:// address away. Run again with --https, or with --no-https to turn it off."
+    fi
 else
     IS_UPDATE="false"
+    CURRENT_HTTPS="false"
     MACHINE_IMAGE="$(aws ssm get-parameter --region "$REGION" --name "$LATEST_IMAGE_PARAMETER" \
         --query Parameter.Value --output text)" ||
         fail "could not look up the Amazon Linux image for $REGION."
@@ -110,6 +121,20 @@ case "$MACHINE_IMAGE" in
 ami-*) ;;
 *) fail "unexpected machine image id: $MACHINE_IMAGE. Nothing was changed." ;;
 esac
+
+[ -n "$HTTPS" ] || HTTPS="false"
+CLOUDFRONT_PREFIX_LIST=""
+if [ "$HTTPS" = "true" ]; then
+    [ "$ALLOWED_CIDR" = "0.0.0.0/0" ] ||
+        fail "--https opens the site to everyone, so it cannot be combined with --allowed-cidr. Nothing was changed."
+    CLOUDFRONT_PREFIX_LIST="$(aws ec2 describe-managed-prefix-lists --region "$REGION" \
+        --filters Name=prefix-list-name,Values=com.amazonaws.global.cloudfront.origin-facing \
+        --query "PrefixLists[0].PrefixListId" --output text)" || CLOUDFRONT_PREFIX_LIST=""
+    case "$CLOUDFRONT_PREFIX_LIST" in
+    pl-*) ;;
+    *) fail "could not find the CloudFront address list for $REGION. Nothing was changed." ;;
+    esac
+fi
 
 PYTHON="python3"
 [ -x "$HERE/../../venv/bin/python" ] && PYTHON="$HERE/../../venv/bin/python"
@@ -132,7 +157,12 @@ echo
 echo "  1 virtual machine ($INSTANCE_TYPE) that indexes '$SOURCE' and then serves the site"
 echo "  1 disk of $DISK_GIB GB, deleted together with the machine"
 echo "  1 fixed public address"
-echo "  1 firewall rule allowing web traffic (port 80) from $ALLOWED_CIDR"
+if [ "$HTTPS" = "true" ]; then
+    echo "  1 firewall rule allowing web traffic (port 80) from CloudFront only"
+    echo "  1 CloudFront distribution that gives the site a public https:// address"
+else
+    echo "  1 firewall rule allowing web traffic (port 80) from $ALLOWED_CIDR"
+fi
 echo "  1 permission role so administrators can connect without SSH"
 [ "$BUDGET" != "0" ] && echo "  1 spending alert at \$$BUDGET per month, sent to $EMAIL"
 [ -n "$COLLECTION_FILE" ] && echo "  The site will describe itself with $COLLECTION_FILE"
@@ -140,6 +170,9 @@ echo
 echo "Estimated cost while it is running:"
 "$PYTHON" "$HERE/estimate_cost.py" --region "$REGION" \
     --instance-type "$INSTANCE_TYPE" --disk-gib "$DISK_GIB" || true
+if [ "$HTTPS" = "true" ]; then
+    echo "  CloudFront: free up to 1 TB and 10 million requests per month, then about \$0.085 per GB"
+fi
 echo
 echo "Remove everything again with: deploy/aws/destroy.sh $NAME --region $REGION"
 echo
@@ -158,6 +191,7 @@ overrides=(
     "AnonymousS3=$ANONYMOUS" "SourceBucket=$SOURCE_BUCKET" "Limit=$LIMIT"
     "InstanceType=$INSTANCE_TYPE" "DiskSizeGiB=$DISK_GIB" "AllowedCidr=$ALLOWED_CIDR"
     "MonthlyBudgetUsd=$BUDGET" "BudgetEmail=$EMAIL" "MachineImageId=$MACHINE_IMAGE"
+    "PublicHttps=$HTTPS" "CloudFrontPrefixList=$CLOUDFRONT_PREFIX_LIST"
 )
 [ -n "$IMAGE" ] && overrides+=("Image=$IMAGE")
 [ -n "$BOOTSTRAP_URL" ] && overrides+=("BootstrapUrl=$BOOTSTRAP_URL")
@@ -180,6 +214,16 @@ else
     echo "The machine is now installing and indexing. The site opens when indexing finishes."
 fi
 echo "Follow progress with: deploy/aws/status.sh $NAME --region $REGION"
+
+if [ "$HTTPS" = "true" ] || [ "$CURRENT_HTTPS" = "true" ]; then
+    echo
+    hops=0
+    [ "$HTTPS" = "true" ] && hops=1
+    configure_flags=(--set "proxy_hops=$hops" --region "$REGION")
+    [ -n "$BOOTSTRAP_URL" ] && configure_flags+=(--bootstrap-url "$BOOTSTRAP_URL")
+    "$HERE/configure.sh" "$NAME" "${configure_flags[@]}" ||
+        echo "The deployment itself succeeded, but the site cannot tell visitors apart yet. Once the machine runs a current version, run: deploy/aws/configure.sh $NAME --set proxy_hops=$hops --region $REGION"
+fi
 
 if [ -n "$COLLECTION_FILE" ]; then
     echo

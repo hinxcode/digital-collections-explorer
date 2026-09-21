@@ -10,11 +10,11 @@ Metadata:
       - Label: {default: Your collection}
         Parameters: [CollectionName, Source, FetchVia, AnonymousS3, SourceBucket, Limit]
       - Label: {default: Machine}
-        Parameters: [InstanceType, DiskSizeGiB, AllowedCidr]
+        Parameters: [InstanceType, DiskSizeGiB, AllowedCidr, PublicHttps]
       - Label: {default: Spending alert}
         Parameters: [MonthlyBudgetUsd, BudgetEmail]
       - Label: {default: Advanced}
-        Parameters: [Image, BootstrapUrl, MachineImageId]
+        Parameters: [Image, BootstrapUrl, MachineImageId, CloudFrontPrefixList]
 
 Parameters:
   CollectionName:
@@ -60,6 +60,13 @@ Parameters:
     Default: 0.0.0.0/0
     AllowedPattern: "^[0-9./]+$"
     Description: Who may open the site. 0.0.0.0/0 is everyone. Use your office range to keep it internal.
+  PublicHttps:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: >-
+      Open the site to everyone over HTTPS, through CloudFront. The machine then only
+      accepts traffic from CloudFront and AllowedCidr is ignored.
   MonthlyBudgetUsd:
     Type: Number
     Default: 0
@@ -78,12 +85,20 @@ Parameters:
   MachineImageId:
     Type: AWS::EC2::Image::Id
     Description: Amazon Linux 2023 (x86_64) image for the machine. deploy.sh fills this in.
+  CloudFrontPrefixList:
+    Type: String
+    Default: ""
+    Description: >-
+      Only with PublicHttps. The id of the prefix list
+      com.amazonaws.global.cloudfront.origin-facing in this region. deploy.sh fills this in.
 
 Conditions:
   HasFetchVia: !Not [!Equals [!Ref FetchVia, ""]]
   IsAnonymous: !Equals [!Ref AnonymousS3, "true"]
   HasLimit: !Not [!Equals [!Ref Limit, 0]]
   HasSourceBucket: !Not [!Equals [!Ref SourceBucket, ""]]
+  UsesHttps: !Equals [!Ref PublicHttps, "true"]
+  IsUsEast1: !Equals [!Ref "AWS::Region", us-east-1]
   HasBudget: !And
     - !Not [!Equals [!Ref MonthlyBudgetUsd, 0]]
     - !Not [!Equals [!Ref BudgetEmail, ""]]
@@ -94,10 +109,16 @@ Resources:
     Properties:
       GroupDescription: !Sub "Web access to the ${CollectionName} collection"
       SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: !Ref AllowedCidr
+        - !If
+          - UsesHttps
+          - IpProtocol: tcp
+            FromPort: 80
+            ToPort: 80
+            SourcePrefixListId: !Ref CloudFrontPrefixList
+          - IpProtocol: tcp
+            FromPort: 80
+            ToPort: 80
+            CidrIp: !Ref AllowedCidr
       Tags:
         - {Key: dce-collection, Value: !Ref CollectionName}
 
@@ -175,6 +196,59 @@ Resources:
       Tags:
         - {Key: dce-collection, Value: !Ref CollectionName}
 
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Condition: UsesHttps
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub "Digital Collections Explorer (${CollectionName})"
+        HttpVersion: http2and3
+        PriceClass: PriceClass_100
+        Origins:
+          - Id: site
+            DomainName: !Sub
+              - "ec2-${DashedAddress}.${Suffix}"
+              - DashedAddress: !Join ["-", !Split [".", !GetAtt SiteAddress.PublicIp]]
+                Suffix: !If
+                  - IsUsEast1
+                  - compute-1.amazonaws.com
+                  - !Sub "${AWS::Region}.compute.amazonaws.com"
+            CustomOriginConfig:
+              OriginProtocolPolicy: http-only
+              HTTPPort: 80
+              OriginReadTimeout: 60
+        CustomErrorResponses:
+          - {ErrorCode: 400, ErrorCachingMinTTL: 0}
+          - {ErrorCode: 500, ErrorCachingMinTTL: 0}
+          - {ErrorCode: 502, ErrorCachingMinTTL: 0}
+          - {ErrorCode: 503, ErrorCachingMinTTL: 0}
+          - {ErrorCode: 504, ErrorCachingMinTTL: 0}
+        DefaultCacheBehavior:
+          TargetOriginId: site
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS, PUT, PATCH, POST, DELETE]
+          Compress: true
+          # Managed policies CachingDisabled and AllViewerExceptHostHeader.
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+          OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+        CacheBehaviors:
+          - PathPattern: /images/*
+            TargetOriginId: site
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD]
+            # Managed policy UseOriginCacheControlHeaders-QueryStrings.
+            CachePolicyId: 4cc15a8a-d715-48a4-82b8-cc0b614638fe
+          - PathPattern: /assets/*
+            TargetOriginId: site
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD]
+            Compress: true
+            # Managed policy CachingOptimized.
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+      Tags:
+        - {Key: dce-collection, Value: !Ref CollectionName}
+
   SpendingAlert:
     Type: AWS::Budgets::Budget
     Condition: HasBudget
@@ -198,7 +272,10 @@ Resources:
 Outputs:
   SiteUrl:
     Description: Opens once indexing has finished.
-    Value: !Sub "http://${SiteAddress.PublicIp}"
+    Value: !If
+      - UsesHttps
+      - !Sub "https://${Distribution.DomainName}"
+      - !Sub "http://${SiteAddress.PublicIp}"
   InstanceId:
     Value: !Ref Instance
   Connect:
