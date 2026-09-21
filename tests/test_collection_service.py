@@ -58,18 +58,25 @@ def test_pages_count_objects_not_images(service):
     assert [r["id"] for r in second_page] == ["rifle"]
 
 
-def test_item_links_back_to_the_institution_and_lists_sibling_images(service):
+def test_item_links_back_to_the_institution(service):
     item = service.item("quilt-front")
     assert item["metadata"]["source_url"] == SI_PAGE
     assert item["metadata"]["title"] == "Star Quilt"
-    assert [other["id"] for other in item["same_object"]] == ["quilt-back"]
     assert service.item("missing") is None
+
+
+def test_item_lists_every_photo_of_its_object_including_itself(service):
+    front, back = service.item("quilt-front"), service.item("quilt-back")
+    assert [photo["id"] for photo in front["photos"]] == ["quilt-front", "quilt-back"]
+    assert front["photos"] == back["photos"]
+    assert len(front["photos"]) == front["image_count"]
 
 
 def test_uncatalogued_image_is_its_own_object_with_no_link(service):
     item = service.item("loose-photo")
     assert item["metadata"]["source_url"] is None
-    assert item["image_count"] == 1 and item["same_object"] == []
+    assert item["image_count"] == 1
+    assert [photo["id"] for photo in item["photos"]] == ["loose-photo"]
 
 
 def test_similar_images_come_from_other_objects(service):
