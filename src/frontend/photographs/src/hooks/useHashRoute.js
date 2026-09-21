@@ -27,11 +27,27 @@ export const searchHref = (query, page = 1) => {
   return `#/search?${params.toString()}`;
 };
 
+const stepsIntoSite = () => window.history.state?.stepsIntoSite;
+
+const rememberStep = (previous) => {
+  if (stepsIntoSite() === undefined) {
+    const state = { ...window.history.state, stepsIntoSite: previous + 1 };
+    window.history.replaceState(state, '');
+  }
+  return stepsIntoSite();
+};
+
 export const useHashRoute = () => {
   const [route, setRoute] = useState(() => parse(window.location.hash));
+  const [canGoBack, setCanGoBack] = useState(false);
 
   useEffect(() => {
+    let current = rememberStep(-1);
+    setCanGoBack(current > 0);
+
     const onHashChange = () => {
+      current = rememberStep(current);
+      setCanGoBack(current > 0);
       setRoute(parse(window.location.hash));
       window.scrollTo(0, 0);
     };
@@ -43,5 +59,5 @@ export const useHashRoute = () => {
     window.location.hash = hash;
   }, []);
 
-  return [route, navigate];
+  return [route, navigate, canGoBack];
 };

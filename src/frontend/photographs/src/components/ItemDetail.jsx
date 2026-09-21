@@ -27,7 +27,7 @@ const Chevron = ({ direction }) => (
   </svg>
 );
 
-function ItemDetail({ id, collection }) {
+function ItemDetail({ id, collection, canGoBack }) {
   const [object, setObject] = useState(null);
   const [currentId, setCurrentId] = useState(id);
   const [similar, setSimilar] = useState([]);
@@ -77,7 +77,7 @@ function ItemDetail({ id, collection }) {
 
   const showPhoto = useCallback((photoId) => {
     setCurrentId(photoId);
-    window.history.replaceState(null, '', itemHref(photoId));
+    window.history.replaceState(window.history.state, '', itemHref(photoId));
   }, []);
 
   const step = useCallback((offset) => {
@@ -129,10 +129,16 @@ function ItemDetail({ id, collection }) {
   return (
     <article className={`item-detail ${isLoading ? 'item-detail-loading' : ''}`}>
       <nav className="item-detail-nav">
-        <button type="button" className="link-button" onClick={() => window.history.back()}>
-          ← Back
-        </button>
-        <a href="#/">Start over</a>
+        {canGoBack ? (
+          <>
+            <button type="button" className="link-button" onClick={() => window.history.back()}>
+              ← Back
+            </button>
+            <a href="#/">Start over</a>
+          </>
+        ) : (
+          <a href="#/">← Browse the collection</a>
+        )}
       </nav>
 
       <div className="item-detail-main">
