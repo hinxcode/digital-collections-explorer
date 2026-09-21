@@ -39,10 +39,15 @@ EXIF_GPS = 34853
 GPS_LATITUDE = 2
 GPS_LONGITUDE = 4
 
-# Measured on Smithsonian images written by src/ingest: a 400 px thumbnail
-# (22 KB) plus a 1920 px processed copy (597 KB), and 5.7 KB of state and metadata.
-IMAGE_BYTES_PER_ITEM = 620_000
+# Longest edge of the two copies src/ingest keeps of every image.
+THUMBNAIL_EDGE = 400
+PROCESSED_EDGE = 1920
+# Measured on a full run of 20,481 Smithsonian images: 7.9 GB of copies holding
+# 2.68 megapixels per image, and 5.7 KB of state and metadata per image.
+STORED_BYTES_PER_PIXEL = 0.145
 DB_BYTES_PER_ITEM = 5_700
+# Used when no image could be sampled. The same run averaged 384 KB per image.
+IMAGE_BYTES_PER_ITEM = 390_000
 
 # Embedding width per model type, stored as float32.
 VECTOR_DIMS = {"clip": 512, "siglip": 768, "imagebind": 1024}
@@ -293,6 +298,14 @@ def catalog_candidate(ref: FileRef) -> CatalogCandidate:
     )
 
 
+def stored_pixels(width: int, height: int) -> float:
+    longest = max(width, height, 1)
+    return sum(
+        width * height * min(1.0, edge / longest) ** 2
+        for edge in (THUMBNAIL_EDGE, PROCESSED_EDGE)
+    )
+
+
 def sample_images(source: Source, images: list[FileRef], count: int) -> dict:
     result = {
         "sampled": 0,
@@ -339,6 +352,9 @@ def sample_images(source: Source, images: list[FileRef], count: int) -> dict:
             "width": width,
             "height": height,
             "megapixels_p50": round(width["p50"] * height["p50"] / 1e6, 1),
+            "stored_pixels_mean": round(
+                sum(map(stored_pixels, widths, heights)) / len(widths)
+            ),
             "modes": dict(modes),
         }
     return result
@@ -630,6 +646,8 @@ def estimate_sizing(stats: ScanStats, bandwidth_bps: float, model_type: str) -> 
     decode = count * megapixels * DECODE_SECONDS_PER_MEGAPIXEL / DECODE_WORKERS
     rates = ENCODE_RATE.get(model_type, ENCODE_RATE["siglip"])
     compute = count / rates[device] + decode
+    stored = stats.dimensions.get("stored_pixels_mean")
+    image_bytes = stored * STORED_BYTES_PER_PIXEL if stored else IMAGE_BYTES_PER_ITEM
     seconds = {
         "compute": round(compute, 1),
         "in_region_aws": round(
@@ -646,7 +664,7 @@ def estimate_sizing(stats: ScanStats, bandwidth_bps: float, model_type: str) -> 
         vectors_bytes=vectors,
         index_bytes=vectors,
         device=device,
-        thumbnails_bytes=count * IMAGE_BYTES_PER_ITEM,
+        thumbnails_bytes=round(count * image_bytes),
         db_bytes=count * DB_BYTES_PER_ITEM,
         serving_ram_bytes=vectors + SERVING_BASE_RAM_BYTES,
         source_bytes=stats.total_bytes,

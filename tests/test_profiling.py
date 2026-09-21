@@ -148,3 +148,44 @@ def test_unreadable_manifest_explains_what_to_check(monkeypatch):
         sources.ParquetManifestSource._local_copy(
             "s3://private-bucket/manifest.parquet", True, "us-west-2"
         )
+
+
+def test_disk_estimate_follows_the_size_of_the_images(profile):
+    from src.profiling.profiler import IMAGE_BYTES_PER_ITEM
+
+    per_image = profile.sizing.thumbnails_bytes / profile.sizing.n_items
+    assert 50_000 < per_image < 120_000
+    assert per_image < IMAGE_BYTES_PER_ITEM
+
+
+def test_disk_estimate_matches_the_measured_smithsonian_run():
+    from src.profiling.models import ScanStats
+    from src.profiling.profiler import estimate_sizing
+
+    stats = ScanStats(image_files=20_481, dimensions={"stored_pixels_mean": 2_676_000})
+    measured = 7.87e9
+    estimated = estimate_sizing(stats, 0, "siglip").thumbnails_bytes
+    assert abs(estimated - measured) / measured < 0.05
+
+
+def test_disk_estimate_has_a_fallback_when_nothing_could_be_sampled():
+    from src.profiling.models import ScanStats
+    from src.profiling.profiler import IMAGE_BYTES_PER_ITEM, estimate_sizing
+
+    stats = ScanStats(image_files=1_000)
+    assert (
+        estimate_sizing(stats, 0, "siglip").thumbnails_bytes
+        == 1_000 * IMAGE_BYTES_PER_ITEM
+    )
+
+
+def test_large_images_are_counted_at_the_size_they_are_stored():
+    from src.ingest import pipeline
+    from src.profiling import profiler
+
+    assert profiler.THUMBNAIL_EDGE == pipeline.THUMBNAIL_EDGE
+    assert profiler.PROCESSED_EDGE == pipeline.PROCESSED_EDGE
+    assert profiler.stored_pixels(200, 100) == 2 * 200 * 100
+    assert profiler.stored_pixels(19_200, 9_600) == pytest.approx(
+        1920 * 960 + 400 * 200
+    )

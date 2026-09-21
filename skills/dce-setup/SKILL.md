@@ -228,12 +228,25 @@ themselves.
 
 See [references/troubleshooting.md](references/troubleshooting.md).
 
+## Putting the site on a server or on AWS
+
+Only when the person asks for it. The README section "Deploying to a Server or to AWS"
+has the commands. `deploy/bootstrap.sh install` turns any Linux machine into the site.
+`deploy/aws/deploy.sh NAME --source ...` creates one AWS machine, and the images must
+already be reachable from the cloud (an `s3://` or `https://` address).
+
+`deploy.sh` lists what it will create and what that costs per month, then waits for
+`yes`. Show the person that list and let them answer. Never pass `--yes` for them
+(ground rule 5). Afterwards `status.sh` reports progress and cost, `describe.sh` and
+`configure.sh` change the description and the limits, `update.sh` switches versions,
+and `destroy.sh` removes everything. Add `--https` only for a site meant for the public.
+
 ## Not available yet
 
 Be honest if asked for these. They are planned, not built:
 
-- Publishing the site to the cloud or to Hugging Face Spaces.
+- Publishing to Hugging Face Spaces, or to a cloud other than AWS.
+- The site's own domain name. `--https` gives it a CloudFront address instead.
 - Changing the layout of the search site.
-- Grouping results so several photos of one object appear as one result.
 - Filters in the search site. The report lists which filters the data supports,
   but the site does not show them yet.
