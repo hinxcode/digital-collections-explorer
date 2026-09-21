@@ -81,7 +81,11 @@ function App() {
           setHasMore(found.length >= RESULTS_PER_PAGE);
         }
       })
-      .catch(() => isCurrent && setError('The search failed. Please try again.'))
+      .catch((searchError) => {
+        if (isCurrent) {
+          setError(searchError.visitorMessage || 'The search failed. Please try again.');
+        }
+      })
       .finally(() => isCurrent && setIsLoading(false));
 
     return () => {
