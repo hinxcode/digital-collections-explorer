@@ -149,8 +149,12 @@ they can see the result in minutes before committing to the full run.
 Give each collection its own folder under `data/collections/`:
 
 ```bash
-$PY -m src.ingest SOURCE --data-dir data/collections/NAME --json data/collections/NAME/ingest_summary.json
+$PY -m src.ingest SOURCE --data-dir data/collections/NAME \
+  --estimated-seconds SECONDS --json data/collections/NAME/ingest_summary.json
 ```
+
+`SECONDS` is `sizing.embed_seconds.estimated` from the profile. Passing it lets the
+final report compare the estimate with what really happened.
 
 `SOURCE` and the `--anonymous` and `--fetch-via` flags are the same as in step 2.
 Add `--limit N` for a sample run.
@@ -162,6 +166,8 @@ Add `--limit N` for a sample run.
 - Original images are streamed and never stored. Only small copies are kept.
 - A few failures are normal in real collections. Report the count and the
   reasons from `problems`. Investigate only if failures exceed a few percent.
+- `$PY -m src.ingest --report --data-dir data/collections/NAME` prints how the run
+  went in plain words at any time, including for a run that finished long ago.
 
 ## Step 6. Start the site
 
@@ -188,8 +194,20 @@ summary. Then confirm search works before telling the person it is ready:
 curl -s "http://localhost:8000/api/search/text?query=a%20portrait&limit=3"
 ```
 
-In your closing message, take the disk space from `disk_bytes_measured` in the
-ingest summary, not from the earlier estimate.
+## Step 7. Tell the person how it went
+
+People have to account for their time and money. When indexing has finished, tell
+them, from the `run` section of the ingest summary and nothing else:
+
+1. How long indexing took, and how that compares with the estimate you gave.
+2. How many images were indexed, skipped and failed. Name the failed files from
+   `run.failed_files` so they can look into them.
+3. How much disk the collection now uses, from `disk_bytes_measured`.
+4. What it cost and what it costs from now on. On a cloud deployment
+   `deploy/aws/status.sh NAME` works this out from current prices, including the
+   cost per 1,000 images. On their own machine, say that it cost nothing extra.
+5. If `status.sh` prints a WARNING about a large machine still running, pass it on
+   first. It is the one thing in the report that keeps costing money.
 
 Give them the address (for example `http://localhost:8000`) and two or three example
 searches suited to their collection. Suggest describing what a picture looks
