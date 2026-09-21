@@ -130,6 +130,32 @@ class IngestState:
             (limit,),
         ).fetchall()
 
+    def finish_times(self) -> list[int]:
+        rows = self.con.execute(
+            "SELECT CAST(strftime('%s', updated_at) AS INTEGER) FROM items "
+            "WHERE status != 'pending' AND updated_at IS NOT NULL ORDER BY 1"
+        )
+        return [row[0] for row in rows]
+
+    def first_item_seconds(self) -> float:
+        row = self.con.execute(
+            "SELECT elapsed_ms FROM items WHERE status != 'pending' "
+            "AND updated_at IS NOT NULL ORDER BY updated_at, rowid LIMIT 1"
+        ).fetchone()
+        return (row[0] or 0) / 1000 if row else 0.0
+
+    def bytes_read(self) -> int:
+        row = self.con.execute(
+            "SELECT sum(size_bytes) FROM items WHERE status IN ('done', 'failed')"
+        ).fetchone()
+        return row[0] or 0
+
+    def failed_files(self, limit: int) -> list[tuple[str, str]]:
+        return self.con.execute(
+            "SELECT key, error FROM items WHERE status = 'failed' ORDER BY key LIMIT ?",
+            (limit,),
+        ).fetchall()
+
     def done_rows(self) -> Iterator[tuple[str, bytes, dict]]:
         rows = self.con.execute(
             "SELECT id, embedding, metadata FROM items "
