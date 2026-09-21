@@ -20,6 +20,7 @@ BUDGET="0"
 EMAIL=""
 IMAGE=""
 BOOTSTRAP_URL=""
+COLLECTION_FILE=""
 ASSUME_YES="false"
 
 usage() {
@@ -31,6 +32,7 @@ Usage: deploy.sh NAME --source SRC [options]
   --anonymous           read S3 without credentials (public buckets)
   --source-bucket NAME  private bucket in this account that the machine may read
   --limit N             only index the first N images
+  --collection-file F   the collection.json that describes the collection to visitors
   --instance-type TYPE  default t3.medium
   --disk-gib N          default 30
   --region REGION       default us-west-2, or AWS_REGION
@@ -56,6 +58,7 @@ while [ $# -gt 0 ]; do
     --anonymous) ANONYMOUS="true"; shift ;;
     --source-bucket) SOURCE_BUCKET="$2"; shift 2 ;;
     --limit) LIMIT="$2"; shift 2 ;;
+    --collection-file) COLLECTION_FILE="$2"; shift 2 ;;
     --instance-type) INSTANCE_TYPE="$2"; shift 2 ;;
     --disk-gib) DISK_GIB="$2"; shift 2 ;;
     --region) REGION="$2"; shift 2 ;;
@@ -72,6 +75,7 @@ done
 
 [ -n "$SOURCE" ] || fail "--source is required"
 [[ "$NAME" =~ ^[a-z0-9][a-z0-9-]*$ ]] || fail "NAME may only contain lowercase letters, digits and hyphens"
+[ -z "$COLLECTION_FILE" ] || [ -f "$COLLECTION_FILE" ] || fail "file not found: $COLLECTION_FILE"
 command -v aws >/dev/null 2>&1 || fail "the AWS CLI is not installed"
 case "$SOURCE" in
 s3://* | http://* | https://*) ;;
@@ -109,6 +113,10 @@ esac
 
 PYTHON="python3"
 [ -x "$HERE/../../venv/bin/python" ] && PYTHON="$HERE/../../venv/bin/python"
+if [ -n "$COLLECTION_FILE" ]; then
+    "$PYTHON" -c "import json, sys; assert isinstance(json.load(open(sys.argv[1])), dict)" "$COLLECTION_FILE" 2>/dev/null ||
+        fail "$COLLECTION_FILE is not a JSON object. See collection.example.json. Nothing was changed."
+fi
 
 echo
 if [ "$IS_UPDATE" = "true" ]; then
@@ -127,6 +135,7 @@ echo "  1 fixed public address"
 echo "  1 firewall rule allowing web traffic (port 80) from $ALLOWED_CIDR"
 echo "  1 permission role so administrators can connect without SSH"
 [ "$BUDGET" != "0" ] && echo "  1 spending alert at \$$BUDGET per month, sent to $EMAIL"
+[ -n "$COLLECTION_FILE" ] && echo "  The site will describe itself with $COLLECTION_FILE"
 echo
 echo "Estimated cost while it is running:"
 "$PYTHON" "$HERE/estimate_cost.py" --region "$REGION" \
@@ -171,6 +180,14 @@ else
     echo "The machine is now installing and indexing. The site opens when indexing finishes."
 fi
 echo "Follow progress with: deploy/aws/status.sh $NAME --region $REGION"
+
+if [ -n "$COLLECTION_FILE" ]; then
+    echo
+    describe_flags=(--file "$COLLECTION_FILE" --region "$REGION")
+    [ -n "$BOOTSTRAP_URL" ] && describe_flags+=(--bootstrap-url "$BOOTSTRAP_URL")
+    "$HERE/describe.sh" "$NAME" "${describe_flags[@]}" ||
+        echo "The deployment itself succeeded. Only the description is missing."
+fi
 
 exit 0
 }
