@@ -66,7 +66,18 @@ case "$*" in
     [ "$FAKE_STACK_EXISTS" = "true" ] || exit 255
     echo "i-0existing" ;;
 *"describe-stacks"*"DiskSizeGiB"*) echo "40" ;;
+*"describe-instances"*"InstanceType"*) echo "c7i.2xlarge" ;;
 *"describe-instances"*) echo "ami-0existing111" ;;
+*"ssm send-command"*)
+    echo "$*" > "$FAKE_AWS_LOG.last_command"
+    echo "command-1" ;;
+*"ssm get-command-invocation"*)
+    if grep -q -- "--json" "$FAKE_AWS_LOG.last_command"; then
+        [ "$FAKE_MACHINE" = "current" ] || { printf 'Failed\t'; exit 0; }
+        printf 'Success\t{"indexed": 3, "run": {"active_seconds": 60}}'
+    else
+        printf 'Success\tIndexing: finished'
+    fi ;;
 *"ssm get-parameter"*) echo "ami-0latest999" ;;
 *"cloudformation deploy"*)
     if [ -n "$FAKE_OVERWRITE_SCRIPT" ]; then
@@ -93,7 +104,13 @@ def fake_deploy(tmp_path):
     (fake_bin / "python3").chmod(0o755)
     log = tmp_path / "aws.log"
 
-    def run(stack_exists, *extra, overwrite_while_running=False):
+    def run(
+        stack_exists,
+        *extra,
+        overwrite_while_running=False,
+        script="deploy.sh",
+        machine="current",
+    ):
         import os
 
         log.write_text("")
@@ -105,7 +122,11 @@ def fake_deploy(tmp_path):
             "FAKE_OVERWRITE_SCRIPT": (
                 str(scripts / "deploy.sh") if overwrite_while_running else ""
             ),
+            "FAKE_MACHINE": machine,
         }
+        if script != "deploy.sh":
+            command = ["bash", str(scripts / script), "demo", *extra]
+            return subprocess.run(command, capture_output=True, text=True, env=env), []
         command = ["bash", str(scripts / "deploy.sh"), "demo", "--yes"]
         command += ["--source", "s3://bucket/images", "--disk-gib", "40", *extra]
         result = subprocess.run(command, capture_output=True, text=True, env=env)
@@ -144,3 +165,74 @@ def test_script_survives_being_saved_while_it_waits_for_aws(fake_deploy):
     assert result.returncode == 0, result.stderr
     assert "command not found" not in result.stderr
     assert "SiteUrl" in result.stdout
+
+
+@pytest.fixture(scope="module")
+def run_cost():
+    import sys
+
+    sys.path.insert(0, str(ROOT / "deploy" / "aws"))
+    path = ROOT / "deploy" / "aws" / "run_cost.py"
+    spec = importlib.util.spec_from_file_location("run_cost", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+PRICES = {"c7i.2xlarge": 0.357, "t3.medium": 0.0416}
+FINISHED_REPORT = {
+    "indexed": 20481,
+    "run": {
+        "active_seconds": 5400,
+        "machine_type": "c7i.2xlarge",
+        "finished_at": "2026-09-20T20:00:00Z",
+    },
+}
+
+
+def test_indexing_is_priced_per_run_and_per_thousand_images(run_cost):
+    lines = run_cost.cost_lines(FINISHED_REPORT, "t3.medium", None, PRICES.get)
+    text = "\n".join(lines)
+    assert "Indexing cost about $0.54" in text
+    assert "1.5 hours on c7i.2xlarge" in text
+    assert "$0.026 per 1,000 images" in text
+    assert "WARNING" not in text
+
+
+def test_a_large_machine_left_running_after_indexing_is_pointed_out(run_cost):
+    from datetime import datetime, timezone
+
+    now = datetime(2026, 9, 21, 1, 0, tzinfo=timezone.utc)
+    lines = run_cost.cost_lines(FINISHED_REPORT, "c7i.2xlarge", None, PRICES.get, now)
+    warning = [line for line in lines if line.startswith("WARNING")][0]
+    assert "finished 5 hours ago" in warning
+    assert "$230.24 per month" in warning
+    assert "--instance-type t3.medium" in warning
+
+
+def test_an_unrecorded_indexing_machine_can_be_named_by_hand(run_cost):
+    report = {"indexed": 10, "run": {"active_seconds": 3600, "machine_type": None}}
+    unknown = run_cost.cost_lines(report, "t3.medium", None, PRICES.get)
+    assert any("--indexed-on" in line for line in unknown)
+    named = run_cost.cost_lines(report, "t3.medium", "c7i.2xlarge", PRICES.get)
+    assert any("Indexing cost about $0.36" in line for line in named)
+
+
+def test_status_prices_the_run_when_the_machine_can_report_it(fake_deploy):
+    result, _ = fake_deploy(True, script="status.sh")
+    assert result.returncode == 0, result.stderr
+    assert "c7i.2xlarge" in result.stdout
+    assert "(cost estimate)" in result.stdout
+
+
+def test_status_says_how_to_update_a_machine_too_old_to_report(fake_deploy):
+    result, _ = fake_deploy(True, script="status.sh", machine="old")
+    assert result.returncode == 0, result.stderr
+    assert "older version" in result.stdout
+    assert "update.sh demo" in result.stdout
+
+
+def test_update_refreshes_the_bootstrap_script_before_switching_images(fake_deploy):
+    result, _ = fake_deploy(True, "--image", "example/image:2", script="update.sh")
+    assert result.returncode == 0, result.stderr
+    assert "The index and the address are kept" in result.stdout
