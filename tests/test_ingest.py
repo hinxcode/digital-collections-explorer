@@ -71,6 +71,7 @@ def test_output_matches_what_the_backend_loads(collection):
     embeddings_dir = Path(data_dir) / "embeddings"
     assert export_for_backend(state, embeddings_dir, "clip", "test-model") == 3
     info = json.loads((embeddings_dir / "index_info.json").read_text())
+    assert info.pop("built_at").endswith("Z")
     assert info == {
         "model_type": "clip",
         "model_name": "test-model",

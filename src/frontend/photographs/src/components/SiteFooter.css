@@ -13,6 +13,10 @@
   margin: 0 auto 1rem;
 }
 
+.site-footer .site-footer-index {
+  color: #7d7d7d;
+}
+
 .site-footer ul {
   display: flex;
   flex-wrap: wrap;

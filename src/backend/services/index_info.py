@@ -1,6 +1,7 @@
 """Records which model built an index, so it is never searched with another one."""
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -22,6 +23,7 @@ def write_index_info(
         "model_name": model_name,
         "dimensions": dimensions,
         "items": items,
+        "built_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
     with open(Path(embeddings_dir) / INDEX_INFO_FILE, "w") as f:
         json.dump(info, f, indent=2)
