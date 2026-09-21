@@ -200,6 +200,19 @@ deploy/aws/deploy.sh my-collection --source s3://bucket/prefix --anonymous --ins
 deploy/aws/deploy.sh my-collection --source s3://bucket/prefix --anonymous --instance-type t3.medium
 ```
 
+`status.sh` reports how the run went and what it cost: when indexing started and
+finished, how long it took, images per second, how much was read from the source, the
+files that failed, the cost of the run at current AWS prices, the cost per 1,000 images,
+and what the machine costs per month from now on. It warns when a large machine is
+still running after indexing has finished. Locally, `python -m src.ingest --report
+--data-dir ...` prints the same report, also for a run that finished long ago.
+
+To move a deployed site to a newer version without indexing again:
+
+```bash
+deploy/aws/update.sh my-collection --image ghcr.io/hinxcode/digital-collections-explorer:next
+```
+
 The images must already be reachable from the cloud (an `s3://` or `https://` address).
 There is no SSH: administrators connect through AWS Session Manager. Pass `--budget` and
 `--email` to be warned when the monthly bill passes an amount you choose.

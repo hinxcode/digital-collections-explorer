@@ -15,6 +15,7 @@ from src.profiling.sources import open_source
 
 from .export import export_for_backend
 from .pipeline import Options, clock, make_item_id, run
+from .report import cloud_machine_type, render_report, run_report
 from .state import IngestState
 
 STATE_FILE = "ingest_state.sqlite"
@@ -65,6 +66,16 @@ def parse_args() -> argparse.Namespace:
         "--status",
         action="store_true",
         help="print the progress of a running or finished ingest as JSON and exit",
+    )
+    parser.add_argument(
+        "--report",
+        action="store_true",
+        help="print how indexing went, in plain words, and exit",
+    )
+    parser.add_argument(
+        "--estimated-seconds",
+        type=float,
+        help="the time estimated beforehand, so the report can compare it with reality",
     )
     parser.add_argument(
         "--device", default="auto", choices=["auto", "cuda", "mps", "cpu"]
@@ -123,6 +134,7 @@ def summary(state: IngestState, embeddings_dir: Path, data_dir: str | None) -> d
         "skipped": counts.get("skipped", 0),
         "failed": counts.get("failed", 0),
         "disk_bytes_measured": measured_disk_bytes(embeddings_dir),
+        "run": run_report(state),
         "problems": [
             {"status": status, "reason": reason, "count": count}
             for status, reason, count in state.problems()
@@ -144,12 +156,15 @@ def main() -> int:
         apply_data_dir(settings, args.data_dir)
     embeddings_dir = Path(settings.embeddings_dir)
 
-    if args.status:
+    if args.status or args.report:
         if not (embeddings_dir / STATE_FILE).exists():
             print(json.dumps({"error": f"no ingest has run in {embeddings_dir}"}))
             return 1
         state = IngestState(str(embeddings_dir / STATE_FILE), COMMIT_EVERY)
-        print(json.dumps(summary(state, embeddings_dir, args.data_dir), indent=2))
+        described = summary(state, embeddings_dir, args.data_dir)
+        print(
+            render_report(described) if args.report else json.dumps(described, indent=2)
+        )
         return 0
     if not args.uri:
         print(
@@ -207,6 +222,10 @@ def main() -> int:
             best_device() if args.device == "auto" else args.device
         )
         service = create_embedding_service()
+        state.remember("device", str(service.device))
+        state.remember("machine_type", cloud_machine_type() or "")
+        if args.estimated_seconds:
+            state.remember("estimated_seconds", str(args.estimated_seconds))
         print(f"Model: {service.model_name} on {service.device}")
         print(
             f"Thumbnails: {settings.thumbnails_dir} | Processed images: "
@@ -244,9 +263,8 @@ def main() -> int:
     exported = export_for_backend(
         state, embeddings_dir, settings.model_type.value, settings.model_name
     )
-    print(f"Wrote {exported:,} embeddings to {embeddings_dir}")
-    used = measured_disk_bytes(embeddings_dir)["total"]
-    print(f"Disk used by this collection: {used / 1024**2:,.1f} MB (measured)")
+    print(f"Wrote {exported:,} embeddings to {embeddings_dir}\n")
+    print(render_report(summary(state, embeddings_dir, args.data_dir)))
     print(f"Start the search server with: {serve_command(args.data_dir)}")
     if args.json_path:
         with open(args.json_path, "w") as handle:

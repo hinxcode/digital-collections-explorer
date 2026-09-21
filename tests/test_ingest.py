@@ -71,6 +71,7 @@ def test_output_matches_what_the_backend_loads(collection):
     embeddings_dir = Path(data_dir) / "embeddings"
     assert export_for_backend(state, embeddings_dir, "clip", "test-model") == 3
     info = json.loads((embeddings_dir / "index_info.json").read_text())
+    assert info.pop("built_at").endswith("Z")
     assert info == {
         "model_type": "clip",
         "model_name": "test-model",
@@ -208,3 +209,53 @@ def test_summary_reports_measured_disk_use(tmp_path, monkeypatch):
     sizes = measured_disk_bytes(tmp_path / "embeddings")
 
     assert sizes == {"index": 100, "thumbnails": 40, "total": 140}
+
+
+def test_time_spent_leaves_out_the_pause_between_two_runs():
+    from src.ingest.report import active_seconds
+
+    first_run = [1000, 1010, 1030]
+    overnight_pause = 8 * 3600
+    second_run = [1030 + overnight_pause, 1030 + overnight_pause + 20]
+    assert active_seconds(first_run + second_run, first_item_seconds=5) == 5 + 30 + 20
+    assert active_seconds([], first_item_seconds=0) == 0
+
+
+def test_report_can_be_rebuilt_from_a_finished_collection(collection):
+    from src.ingest.report import render_report, run_report
+
+    data_dir = tempfile.mkdtemp(prefix="dce_ingest_out_")
+    state, _, _, _ = ingest(collection, data_dir)
+    state.remember("model_name", "test-model")
+    report = run_report(state)
+
+    assert report["started_at"] and report["finished_at"]
+    assert report["source_bytes_read"] > 0
+    assert [f["file"] for f in report["failed_files"]] == ["b/broken.jpg"]
+    assert report["failed_files"][0]["reason"].startswith("decode:")
+
+    text = render_report(
+        {
+            "indexed": 3,
+            "skipped": 0,
+            "failed": 1,
+            "pending": 0,
+            "disk_bytes_measured": {"total": 2048},
+            "problems": [],
+            "run": report,
+        }
+    )
+    assert "Indexing: finished" in text
+    assert "b/broken.jpg" in text
+    assert "test-model" in text
+    assert text.isascii()
+
+
+def test_machine_type_is_unknown_away_from_a_cloud_machine(monkeypatch):
+    from src.ingest import report
+
+    def unreachable(*args, **kwargs):
+        raise OSError("no metadata service here")
+
+    monkeypatch.setattr(report.urllib.request, "urlopen", unreachable)
+    assert report.cloud_machine_type() is None

@@ -165,7 +165,11 @@ echo
 aws cloudformation describe-stacks --region "$REGION" --stack-name "$STACK" \
     --query "Stacks[0].Outputs[].[OutputKey,OutputValue]" --output text
 echo
-echo "The machine is now installing and indexing. The site opens when indexing finishes."
+if [ "$IS_UPDATE" = "true" ]; then
+    echo "The deployment was updated. The index and the address were kept."
+else
+    echo "The machine is now installing and indexing. The site opens when indexing finishes."
+fi
 echo "Follow progress with: deploy/aws/status.sh $NAME --region $REGION"
 
 exit 0

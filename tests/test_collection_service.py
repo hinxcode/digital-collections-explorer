@@ -101,6 +101,7 @@ def test_collection_file_overrides_defaults(service, tmp_path, monkeypatch):
     info = service.info()
     assert info["title"] == "NMAH" and info["example_queries"] == ["a quilt"]
     assert (info["images"], info["objects"]) == (4, 3)
+    assert set(info["index"]) == {"model_name", "built_at"}
 
 
 def test_a_saturating_score_transform_does_not_scramble_the_ranking(service):

@@ -11,6 +11,7 @@ import torch
 from ..core.config import settings
 from .catalog_fields import object_id_from, source_url_from
 from .embedding_service import EmbeddingService, embedding_service
+from .index_info import read_index_info
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +84,11 @@ class CollectionService:
                 logger.warning(f"Ignoring unreadable {path}: {e}")
         described["images"] = self.indexed_count
         described["objects"] = len(self.members)
+        index = read_index_info(self.embeddings.embeddings_dir) or {}
+        described["index"] = {
+            "model_name": index.get("model_name"),
+            "built_at": index.get("built_at"),
+        }
         return described
 
     def sample(

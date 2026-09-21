@@ -16,13 +16,15 @@ ANONYMOUS="false"
 LIMIT=""
 PORT="8000"
 KEEP_DATA="false"
+AS_JSON="false"
+IMAGE_WAS_GIVEN="false"
 
 # The container runs as this user id, so the data folder must belong to it.
 CONTAINER_UID=1000
 
 usage() {
     cat <<'EOF'
-Usage: bootstrap.sh <install|status|uninstall> --name NAME [options]
+Usage: bootstrap.sh <install|status|update|uninstall> --name NAME [options]
 
 install options:
   --source SRC        a folder, s3://bucket/prefix, or a .parquet manifest (required)
@@ -33,6 +35,12 @@ install options:
   --image IMAGE       container image to run
   --image-tar FILE    load the image from a file instead of downloading it
   --data-root DIR     where collections are stored (default /opt/dce)
+
+status options:
+  --json              print the full report as JSON
+
+update options:
+  --image IMAGE       switch the site to this image. The index is kept.
 
 uninstall options:
   --keep-data         stop the site but keep the index and images
@@ -54,10 +62,11 @@ parse_args() {
         --anonymous) ANONYMOUS="true"; shift ;;
         --limit) LIMIT="$2"; shift 2 ;;
         --port) PORT="$2"; shift 2 ;;
-        --image) IMAGE="$2"; shift 2 ;;
+        --image) IMAGE="$2"; IMAGE_WAS_GIVEN="true"; shift 2 ;;
         --image-tar) IMAGE_TAR="$2"; shift 2 ;;
         --data-root) DATA_ROOT="$2"; shift 2 ;;
         --keep-data) KEEP_DATA="true"; shift ;;
+        --json) AS_JSON="true"; shift ;;
         -h | --help) usage; exit 0 ;;
         *) fail "unknown option: $1" ;;
         esac
@@ -190,13 +199,20 @@ do_status() {
     if [ ! -d "$COLLECTION_DIR" ]; then
         fail "no collection named $NAME in $DATA_ROOT"
     fi
-    if [ -f "$COLLECTION_DIR/ingest_complete" ]; then
-        echo "Indexing: finished"
-    else
-        echo "Indexing: in progress"
+    if [ "$AS_JSON" = "true" ]; then
+        docker run --rm -v "$COLLECTION_DIR:/data" "$(image_in_use)" ingest --status 2>/dev/null
+        return
     fi
-    docker run --rm -v "$COLLECTION_DIR:/data" "$(image_in_use)" ingest --status 2>/dev/null |
-        grep -E '^  "(indexed|pending|skipped|failed)"' | tr -d '",' || true
+    if ! docker run --rm -v "$COLLECTION_DIR:/data" "$(image_in_use)" ingest --report 2>/dev/null; then
+        if [ -f "$COLLECTION_DIR/ingest_complete" ]; then
+            echo "Indexing: finished"
+        else
+            echo "Indexing: in progress"
+        fi
+        docker run --rm -v "$COLLECTION_DIR:/data" "$(image_in_use)" ingest --status 2>/dev/null |
+            grep -E '^  "(indexed|pending|skipped|failed)"' | tr -d '",' || true
+    fi
+    echo "Image: $(image_in_use)"
     if docker ps --format '{{.Names}}' | grep -qx "$SERVICE"; then
         echo "Site: running on port $(port_in_use)"
     else
@@ -206,6 +222,23 @@ do_status() {
 
 image_in_use() { grep -oE '"[^"]+" (ingest|serve)' "$RUNNER" | head -1 | cut -d'"' -f2; }
 port_in_use() { grep -oE '\-p [0-9]+:8000' "$RUNNER" | grep -oE '[0-9]+' | head -1; }
+
+do_update() {
+    [ "$(id -u)" -eq 0 ] || fail "run this with sudo"
+    [ -f "$RUNNER" ] || fail "no collection named $NAME in $DATA_ROOT"
+    [ "$IMAGE_WAS_GIVEN" = "true" ] || fail "--image is required"
+    local current
+    current="$(image_in_use)"
+    fetch_image
+    sed -i "s|\"$current\"|\"$IMAGE\"|g" "$RUNNER"
+    if has_systemd; then
+        systemctl restart "$SERVICE"
+    else
+        docker rm -f "$SERVICE" >/dev/null 2>&1 || true
+        nohup "$RUNNER" >"$COLLECTION_DIR/runner.log" 2>&1 &
+    fi
+    say "Switched $NAME from $current to $IMAGE. The index was kept."
+}
 
 do_uninstall() {
     [ "$(id -u)" -eq 0 ] || fail "run this with sudo"
@@ -228,6 +261,7 @@ parse_args "$@"
 case "$ACTION" in
 install) do_install ;;
 status) do_status ;;
+update) do_update ;;
 uninstall) do_uninstall ;;
 *) usage; exit 1 ;;
 esac
