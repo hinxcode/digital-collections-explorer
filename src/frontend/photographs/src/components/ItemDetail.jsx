@@ -27,6 +27,12 @@ const Chevron = ({ direction }) => (
   </svg>
 );
 
+const ExternalLinkIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M14 5h5v5M19 5l-8 8M11 7H6a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-5" />
+  </svg>
+);
+
 function ItemDetail({ id, collection, canGoBack }) {
   const [object, setObject] = useState(null);
   const [currentId, setCurrentId] = useState(id);
@@ -215,7 +221,8 @@ function ItemDetail({ id, collection, canGoBack }) {
 
           {sourceUrl && (
             <a className="item-detail-source" href={sourceUrl} target="_blank" rel="noopener noreferrer">
-              View the full record at {sourceName} ↗
+              <span>View the full record at {sourceName}</span>
+              <ExternalLinkIcon />
             </a>
           )}
 
