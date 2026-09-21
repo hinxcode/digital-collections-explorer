@@ -6,14 +6,16 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .api.routes import browse, embeddings, images, search
 from .core.config import settings
 from .services.embedding_service import embedding_service
 from .services.index_info import describe_mismatch
+from .services.limits import refuse_oversized_upload
 
 logging.basicConfig(
     level=logging.INFO,
@@ -72,6 +74,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def guard_uploads(request: Request, call_next):
+    try:
+        refuse_oversized_upload(request)
+    except HTTPException as refusal:
+        return JSONResponse({"detail": refusal.detail}, status_code=refusal.status_code)
+    return await call_next(request)
+
 
 app.include_router(search.router)
 app.include_router(browse.router)

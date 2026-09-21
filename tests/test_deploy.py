@@ -40,6 +40,7 @@ def test_estimate_never_shows_a_total_it_cannot_back_up(estimate_cost):
         "deploy/aws/status.sh",
         "deploy/aws/update.sh",
         "deploy/aws/describe.sh",
+        "deploy/aws/configure.sh",
     ],
 )
 def test_scripts_parse_and_explain_themselves(script):
@@ -335,7 +336,12 @@ def test_deploy_creates_nothing_when_the_description_is_broken(fake_deploy, tmp_
 
 
 FAKE_DOCKER = """#!/usr/bin/env bash
-shift 5
+while [ "$1" != "python" ]; do
+    [ "$1" = "-v" ] && export DCE_DATA_DIR="${{2%%:*}}"
+    shift
+done
+shift
+cd {root}
 exec {python} "$@"
 """
 
@@ -349,12 +355,13 @@ def installed_collection(tmp_path):
     (data_root / "run-demo.sh").write_text('docker run "example/image:1" serve\n')
     fake_bin = tmp_path / "docker-bin"
     fake_bin.mkdir()
-    (fake_bin / "docker").write_text(FAKE_DOCKER.format(python=sys.executable))
+    fake_docker = FAKE_DOCKER.format(python=sys.executable, root=ROOT)
+    (fake_bin / "docker").write_text(fake_docker)
     (fake_bin / "docker").chmod(0o755)
     env = {**os.environ, "PATH": f"{fake_bin}:{os.environ['PATH']}"}
 
-    def run(name, *flags):
-        command = ["bash", str(ROOT / "deploy/bootstrap.sh"), "describe"]
+    def run(name, *flags, action="describe"):
+        command = ["bash", str(ROOT / "deploy/bootstrap.sh"), action]
         command += ["--name", name, "--data-root", str(data_root), *flags]
         return subprocess.run(command, capture_output=True, text=True, env=env)
 
@@ -394,3 +401,43 @@ def test_bootstrap_describe_refuses_a_collection_that_is_not_installed(
     result = run("other", "--collection-file", str(description))
     assert result.returncode != 0
     assert "no collection named other" in result.stderr
+
+
+def test_bootstrap_configure_changes_limits_and_keeps_the_others(installed_collection):
+    run, placed = installed_collection
+    saved = placed.with_name("settings.json")
+    assert run("demo", "--set", "max_upload_mb=20", action="configure").returncode == 0
+    result = run("demo", "--set", "proxy_hops=1", action="configure")
+    assert result.returncode == 0, result.stderr
+    assert json.loads(saved.read_text()) == {"max_upload_mb": 20, "proxy_hops": 1}
+
+
+def test_bootstrap_configure_refuses_a_setting_it_does_not_know(installed_collection):
+    run, placed = installed_collection
+    result = run("demo", "--set", "volume=11", action="configure")
+    assert result.returncode != 0
+    assert "unknown setting: volume" in result.stderr
+    assert not placed.with_name("settings.json").exists()
+
+
+def test_configure_sends_the_new_limits_to_the_machine(fake_deploy):
+    result, calls = fake_deploy(
+        True,
+        "--set",
+        "max_upload_mb=20",
+        "--set",
+        "proxy_hops=1",
+        script="configure.sh",
+    )
+    assert result.returncode == 0, result.stderr
+    sent = [c for c in calls if "ssm send-command" in c][-1]
+    assert "configure --name demo --set max_upload_mb=20 --set proxy_hops=1" in sent
+
+
+def test_configure_refuses_anything_that_is_not_a_number(fake_deploy):
+    result, calls = fake_deploy(
+        True, "--set", "proxy_hops=$(reboot)", script="configure.sh"
+    )
+    assert result.returncode != 0
+    assert "KEY=NUMBER" in result.stderr
+    assert not any("ssm send-command" in c for c in calls)

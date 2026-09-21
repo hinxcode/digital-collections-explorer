@@ -19,6 +19,7 @@ KEEP_DATA="false"
 AS_JSON="false"
 COLLECTION_FILE=""
 COLLECTION_BASE64=""
+SETTINGS=()
 IMAGE_WAS_GIVEN="false"
 
 # The container runs as this user id, so the data folder must belong to it.
@@ -26,7 +27,7 @@ CONTAINER_UID=1000
 
 usage() {
     cat <<'EOF'
-Usage: bootstrap.sh <install|status|describe|update|uninstall> --name NAME [options]
+Usage: bootstrap.sh <install|status|describe|configure|update|uninstall> --name NAME [options]
 
 install options:
   --source SRC        a folder, s3://bucket/prefix, or a .parquet manifest (required)
@@ -44,6 +45,10 @@ status options:
 
 describe options:
   --collection-file FILE  replace the collection.json of a running site. No restart needed.
+
+configure options:
+  --set KEY=VALUE     change a limit of a running site. No restart needed. Repeatable.
+                      max_upload_mb, searches_per_minute, concurrent_searches, proxy_hops
 
 update options:
   --image IMAGE       switch the site to this image. The index is kept.
@@ -75,6 +80,7 @@ parse_args() {
         --json) AS_JSON="true"; shift ;;
         --collection-file) COLLECTION_FILE="$2"; shift 2 ;;
         --collection-base64) COLLECTION_BASE64="$2"; shift 2 ;;
+        --set) SETTINGS+=("$2"); shift 2 ;;
         -h | --help) usage; exit 0 ;;
         *) fail "unknown option: $1" ;;
         esac
@@ -256,6 +262,16 @@ do_describe() {
     place_description "$(image_in_use)"
 }
 
+do_configure() {
+    [ "${#SETTINGS[@]}" -gt 0 ] || fail "--set KEY=VALUE is required"
+    [ -f "$RUNNER" ] || fail "no collection named $NAME in $DATA_ROOT"
+    [ -w "$COLLECTION_DIR" ] || fail "run this with sudo"
+    docker run --rm -v "$COLLECTION_DIR:/data" "$(image_in_use)" \
+        python -m src.backend.core.site_settings "${SETTINGS[@]}" ||
+        fail "the settings were not changed. If this site runs an older version, update it first."
+    say "The site uses these limits from now on"
+}
+
 image_in_use() { grep -oE '"[^"]+" (ingest|serve)' "$RUNNER" | head -1 | cut -d'"' -f2; }
 port_in_use() { grep -oE '\-p [0-9]+:8000' "$RUNNER" | grep -oE '[0-9]+' | head -1; }
 
@@ -298,6 +314,7 @@ case "$ACTION" in
 install) do_install ;;
 status) do_status ;;
 describe) do_describe ;;
+configure) do_configure ;;
 update) do_update ;;
 uninstall) do_uninstall ;;
 *) usage; exit 1 ;;

@@ -1,5 +1,18 @@
 const API_URL = import.meta.env.API_BASE_URL;
 
+const VISITOR_FACING_STATUSES = [400, 411, 413, 429, 503];
+
+const failure = async (response) => {
+  const error = new Error(`API error: ${response.status}`);
+  if (VISITOR_FACING_STATUSES.includes(response.status)) {
+    const body = await response.json().catch(() => null);
+    if (body && typeof body.detail === 'string') {
+      error.visitorMessage = body.detail;
+    }
+  }
+  return error;
+};
+
 /**
  * Search for similar photographs by text
  * @param {string} query - The text query
@@ -13,7 +26,7 @@ export const searchByText = async (query, limit = 50, page = 1) => {
     const response = await fetch(`${API_URL}/api/search/text?query=${encodeURIComponent(query)}&limit=${limit}&page=${pageParam}`);
     
     if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+      throw await failure(response);
     }
     
     const { results } = await response.json();
@@ -44,7 +57,7 @@ export const searchByImage = async (image, limit = 50, page = 1) => {
     });
     
     if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+      throw await failure(response);
     }
     
     const { results } = await response.json();
