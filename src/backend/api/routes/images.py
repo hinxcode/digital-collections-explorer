@@ -8,6 +8,10 @@ from src.backend.services.embedding_service import embedding_service
 
 router = APIRouter(tags=["images"])
 
+# One day, in seconds.
+IMAGE_CACHE_SECONDS = 86_400
+CACHE_HEADERS = {"Cache-Control": f"public, max-age={IMAGE_CACHE_SECONDS}"}
+
 
 def resolve_path(path_str: str) -> Path:
     """Resolve a stored path, which may be relative to the collection's data folder"""
@@ -56,7 +60,7 @@ async def get_image_by_id(
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"Image not found at path: {path}")
 
-    return FileResponse(path)
+    return FileResponse(path, headers=CACHE_HEADERS)
 
 
 @router.get("/static/{id}")
