@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const parse = (hash) => {
   const [path, queryString = ''] = hash.replace(/^#/, '').split('?');
@@ -27,37 +27,68 @@ export const searchHref = (query, page = 1) => {
   return `#/search?${params.toString()}`;
 };
 
+const HOME = '#/';
+
 const stepsIntoSite = () => window.history.state?.stepsIntoSite;
 
 const rememberStep = (previous) => {
   if (stepsIntoSite() === undefined) {
     const state = { ...window.history.state, stepsIntoSite: previous + 1 };
-    window.history.replaceState(state, '');
+    window.history.replaceState(state, '', window.location.hash || HOME);
   }
   return stepsIntoSite();
+};
+
+const inPageLink = (event) => {
+  if (event.defaultPrevented || event.button !== 0) {
+    return null;
+  }
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+    return null;
+  }
+  const link = event.target.closest?.('a[href^="#/"]');
+  return link && !link.target ? link.getAttribute('href') : null;
 };
 
 export const useHashRoute = () => {
   const [route, setRoute] = useState(() => parse(window.location.hash));
   const [canGoBack, setCanGoBack] = useState(false);
+  const current = useRef(0);
 
-  useEffect(() => {
-    let current = rememberStep(-1);
-    setCanGoBack(current > 0);
-
-    const onHashChange = () => {
-      current = rememberStep(current);
-      setCanGoBack(current > 0);
-      setRoute(parse(window.location.hash));
-      window.scrollTo(0, 0);
-    };
-    window.addEventListener('hashchange', onHashChange);
-    return () => window.removeEventListener('hashchange', onHashChange);
+  const show = useCallback(() => {
+    current.current = rememberStep(current.current);
+    setCanGoBack(current.current > 0);
+    setRoute(parse(window.location.hash));
+    window.scrollTo(0, 0);
   }, []);
 
   const navigate = useCallback((hash) => {
-    window.location.hash = hash;
-  }, []);
+    if (hash !== window.location.hash) {
+      window.history.pushState({ stepsIntoSite: current.current + 1 }, '', hash);
+    }
+    show();
+  }, [show]);
+
+  useEffect(() => {
+    current.current = rememberStep(-1);
+    setCanGoBack(current.current > 0);
+
+    const onClick = (event) => {
+      const hash = inPageLink(event);
+      if (hash) {
+        event.preventDefault();
+        navigate(hash);
+      }
+    };
+    window.addEventListener('popstate', show);
+    window.addEventListener('hashchange', show);
+    document.addEventListener('click', onClick);
+    return () => {
+      window.removeEventListener('popstate', show);
+      window.removeEventListener('hashchange', show);
+      document.removeEventListener('click', onClick);
+    };
+  }, [navigate, show]);
 
   return [route, navigate, canGoBack];
 };
