@@ -111,16 +111,14 @@ class CollectionService:
         return len(self.members)
 
     def item(self, item_id: str) -> Optional[Dict[str, Any]]:
-        """Return one image together with the other images of the same object"""
+        """Return one image together with every photo of its object, itself included"""
         self._ensure_index()
         index = self.position.get(item_id)
         if index is None:
             return None
         described = self.present(index)
-        described["same_object"] = [
-            self.present(other)
-            for other in self.members[self.object_ids[index]]
-            if other != index
+        described["photos"] = [
+            self.present(member) for member in self.members[self.object_ids[index]]
         ]
         return described
 
