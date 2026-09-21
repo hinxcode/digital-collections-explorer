@@ -75,8 +75,21 @@ case "$*" in
 *"describe-stacks"*"InstanceId"*)
     [ "$FAKE_STACK_EXISTS" = "true" ] || grep -q "cloudformation deploy" "$FAKE_AWS_LOG" || exit 255
     echo "i-0existing" ;;
-*"describe-stacks"*"DiskSizeGiB"*) echo "40" ;;
-*"describe-stacks"*"PublicHttps"*) echo "${FAKE_HTTPS:-false}" ;;
+*"describe-stacks"*"Parameters[]"*)
+    printf 'CollectionName\tdemo\n'
+    printf 'Source\ts3://bucket/images\n'
+    printf 'FetchVia\t\n'
+    printf 'AnonymousS3\ttrue\n'
+    printf 'SourceBucket\tprivate-bucket\n'
+    printf 'Limit\t0\n'
+    printf 'InstanceType\tc7i.2xlarge\n'
+    printf 'DiskSizeGiB\t40\n'
+    printf 'AllowedCidr\t198.51.100.0/24\n'
+    printf 'MonthlyBudgetUsd\t50\n'
+    printf 'BudgetEmail\tcurator@example.org\n'
+    printf 'Image\texample/image:1\n'
+    printf 'BootstrapUrl\thttps://example.org/bootstrap.sh\n'
+    printf 'PublicHttps\t%s\n' "${FAKE_HTTPS:-false}" ;;
 *"describe-managed-prefix-lists"*) echo "pl-0cloudfront" ;;
 *"describe-instances"*"InstanceType"*) echo "c7i.2xlarge" ;;
 *"describe-instances"*) echo "ami-0existing111" ;;
@@ -156,7 +169,9 @@ def fake_deploy(tmp_path):
             result = subprocess.run(command, capture_output=True, text=True, env=env)
             return result, log.read_text().splitlines()
         command = ["bash", str(scripts / "deploy.sh"), "demo", "--yes"]
-        command += ["--source", "s3://bucket/images", "--disk-gib", "40", *extra]
+        if not stack_exists:
+            command += ["--source", "s3://bucket/images", "--disk-gib", "40"]
+        command += extra
         result = subprocess.run(command, capture_output=True, text=True, env=env)
         deploys = [
             c for c in log.read_text().splitlines() if "cloudformation deploy" in c
@@ -472,14 +487,15 @@ def test_https_cannot_be_combined_with_a_restricted_audience(fake_deploy):
     result, deploys = fake_deploy(False, "--https", "--allowed-cidr", "10.0.0.0/8")
     assert result.returncode != 0
     assert deploys == []
-    assert "cannot be combined" in result.stderr
+    assert "--allowed-cidr cannot be used" in result.stderr
 
 
 def test_an_update_never_drops_https_by_omission(fake_deploy):
-    result, deploys = fake_deploy(True, served_over_https=True)
-    assert result.returncode != 0
-    assert deploys == []
-    assert "--no-https" in result.stderr
+    result, deploys = fake_deploy(
+        True, "--instance-type", "t3.medium", served_over_https=True
+    )
+    assert result.returncode == 0, result.stderr
+    assert "PublicHttps=true" in deploys[0]
 
 
 def test_turning_https_off_stops_trusting_forwarded_addresses(fake_deploy, tmp_path):
@@ -487,3 +503,73 @@ def test_turning_https_off_stops_trusting_forwarded_addresses(fake_deploy, tmp_p
     assert result.returncode == 0, result.stderr
     assert "PublicHttps=false" in deploys[0]
     assert "configure --name demo --set proxy_hops=0" in sent_commands(tmp_path)[-1]
+
+
+def test_an_update_keeps_every_setting_that_is_left_out(fake_deploy):
+    result, deploys = fake_deploy(True, "--instance-type", "t3.medium")
+    assert result.returncode == 0, result.stderr
+    for kept in (
+        "Source=s3://bucket/images",
+        "AnonymousS3=true",
+        "SourceBucket=private-bucket",
+        "DiskSizeGiB=40",
+        "AllowedCidr=198.51.100.0/24",
+        "MonthlyBudgetUsd=50",
+        "BudgetEmail=curator@example.org",
+    ):
+        assert kept in deploys[0]
+    assert "Machine type: c7i.2xlarge -> t3.medium" in result.stdout
+    assert "Who may open the site" not in result.stdout
+
+
+def test_an_update_says_so_when_nothing_changes(fake_deploy):
+    result, deploys = fake_deploy(True)
+    assert result.returncode == 0, result.stderr
+    assert "None of its settings change" in result.stdout
+    assert "InstanceType=c7i.2xlarge" in deploys[0]
+
+
+def test_opening_the_site_to_everyone_has_to_be_asked_for(fake_deploy):
+    result, deploys = fake_deploy(True, "--allowed-cidr", "0.0.0.0/0")
+    assert result.returncode == 0, result.stderr
+    assert "AllowedCidr=0.0.0.0/0" in deploys[0]
+    assert "Who may open the site: 198.51.100.0/24 -> 0.0.0.0/0" in result.stdout
+
+
+def test_a_new_image_is_sent_to_update_instead_of_restarting_the_machine(fake_deploy):
+    result, deploys = fake_deploy(True, "--image", "example/image:2")
+    assert result.returncode != 0
+    assert deploys == []
+    assert "update.sh demo --image example/image:2" in result.stderr
+
+
+def test_repeating_the_image_the_machine_was_created_with_is_fine(fake_deploy):
+    result, deploys = fake_deploy(True, "--image", "example/image:1")
+    assert result.returncode == 0, result.stderr
+    assert "Image=" not in deploys[0]
+
+
+@pytest.mark.parametrize(
+    "flags",
+    [
+        ("--source", "s3://bucket/other"),
+        ("--fetch-via", "s3://elsewhere"),
+        ("--limit", "500"),
+        ("--bootstrap-url", "https://example.org/other.sh"),
+    ],
+)
+def test_settings_that_only_matter_at_first_boot_cannot_change_later(
+    fake_deploy, flags
+):
+    result, deploys = fake_deploy(True, *flags)
+    assert result.returncode != 0
+    assert deploys == []
+    assert "only applies when a machine is first created" in result.stderr
+
+
+def test_a_restricted_site_cannot_be_kept_restricted_under_https(fake_deploy):
+    result, deploys = fake_deploy(
+        True, "--allowed-cidr", "10.0.0.0/8", served_over_https=True
+    )
+    assert result.returncode != 0
+    assert deploys == []

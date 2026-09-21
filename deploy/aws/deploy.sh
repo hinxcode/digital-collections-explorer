@@ -10,14 +10,15 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-us-west-2}}"
 SOURCE=""
 FETCH_VIA=""
-ANONYMOUS="false"
+ANONYMOUS=""
 SOURCE_BUCKET=""
-LIMIT="0"
-INSTANCE_TYPE="t3.medium"
-DISK_GIB="30"
-ALLOWED_CIDR="0.0.0.0/0"
-BUDGET="0"
+LIMIT=""
+INSTANCE_TYPE=""
+DISK_GIB=""
+ALLOWED_CIDR=""
+BUDGET=""
 EMAIL=""
+CHANGES=()
 IMAGE=""
 BOOTSTRAP_URL=""
 COLLECTION_FILE=""
@@ -28,7 +29,10 @@ usage() {
     cat <<'EOF'
 Usage: deploy.sh NAME --source SRC [options]
 
-  --source SRC          s3://bucket/prefix or the URL of a .parquet manifest (required)
+Run it again with the same NAME and only the options you want to change.
+Everything you leave out keeps the value the deployment already has.
+
+  --source SRC          s3://bucket/prefix or the URL of a .parquet manifest (required the first time)
   --fetch-via S3URI     bucket holding the files, when manifest URLs are not downloadable
   --anonymous           read S3 without credentials (public buckets)
   --source-bucket NAME  private bucket in this account that the machine may read
@@ -42,7 +46,7 @@ Usage: deploy.sh NAME --source SRC [options]
   --no-https            go back to plain HTTP on the machine's own address
   --budget USD          email an alert when the monthly bill passes this amount
   --email ADDRESS       where to send that alert
-  --image IMAGE         container image to run
+  --image IMAGE         container image to install. Later, switch versions with update.sh
   --bootstrap-url URL   where the machine downloads bootstrap.sh from
   --yes                 do not ask for confirmation
 EOF
@@ -78,14 +82,30 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-[ -n "$SOURCE" ] || fail "--source is required"
 [[ "$NAME" =~ ^[a-z0-9][a-z0-9-]*$ ]] || fail "NAME may only contain lowercase letters, digits and hyphens"
 [ -z "$COLLECTION_FILE" ] || [ -f "$COLLECTION_FILE" ] || fail "file not found: $COLLECTION_FILE"
 command -v aws >/dev/null 2>&1 || fail "the AWS CLI is not installed"
-case "$SOURCE" in
-s3://* | http://* | https://*) ;;
-*) fail "the cloud machine cannot see files on this computer. --source must be an s3:// or https:// address" ;;
-esac
+
+current_parameter() {
+    echo "$CURRENT_PARAMETERS" | awk -F'\t' -v key="$1" '$1 == key && $2 != "None" { print $2 }'
+}
+
+keep() {
+    local variable="$1" key="$2" label="$3" current
+    current="$(current_parameter "$key")"
+    if [ -z "${!variable}" ]; then
+        printf -v "$variable" '%s' "$current"
+    elif [ "${!variable}" != "$current" ]; then
+        CHANGES+=("$label: ${current:-none} -> ${!variable}")
+    fi
+}
+
+set_at_first_boot() {
+    local flag="$1" given="$2" current
+    current="$(current_parameter "$3")"
+    [ -z "$given" ] || [ "$given" = "$current" ] ||
+        fail "$flag only applies when a machine is first created, and this one was created with '$current'. Changing it now would restart the machine and change nothing else. Leave $flag out. To index something else, remove this deployment and create a new one."
+}
 
 STACK="dce-$NAME"
 LATEST_IMAGE_PARAMETER="/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
@@ -100,19 +120,56 @@ if [ -n "$EXISTING_INSTANCE" ] && [ "$EXISTING_INSTANCE" != "None" ]; then
     MACHINE_IMAGE="$(aws ec2 describe-instances --region "$REGION" --instance-ids "$EXISTING_INSTANCE" \
         --query "Reservations[0].Instances[0].ImageId" --output text)" ||
         fail "could not read the existing machine. Nothing was changed."
-    CURRENT_DISK="$(aws cloudformation describe-stacks --region "$REGION" --stack-name "$STACK" \
-        --query "Stacks[0].Parameters[?ParameterKey=='DiskSizeGiB'].ParameterValue" --output text)"
-    if [ "$CURRENT_DISK" != "$DISK_GIB" ]; then
-        fail "this deployment has a $CURRENT_DISK GB disk. Changing it to $DISK_GIB GB would replace the machine and delete its index. Run again with --disk-gib $CURRENT_DISK."
+    CURRENT_PARAMETERS="$(aws cloudformation describe-stacks --region "$REGION" --stack-name "$STACK" \
+        --query "Stacks[0].Parameters[].[ParameterKey,ParameterValue]" --output text)" ||
+        fail "could not read the existing deployment. Nothing was changed."
+
+    CURRENT_DISK="$(current_parameter DiskSizeGiB)"
+    if [ -n "$DISK_GIB" ] && [ "$DISK_GIB" != "$CURRENT_DISK" ]; then
+        fail "this deployment has a $CURRENT_DISK GB disk. Changing it to $DISK_GIB GB would replace the machine and delete its index. Leave --disk-gib out."
     fi
-    CURRENT_HTTPS="$(aws cloudformation describe-stacks --region "$REGION" --stack-name "$STACK" \
-        --query "Stacks[0].Parameters[?ParameterKey=='PublicHttps'].ParameterValue" --output text)"
-    if [ "$CURRENT_HTTPS" = "true" ] && [ -z "$HTTPS" ]; then
-        fail "this deployment is served over HTTPS. Leaving that out would take its https:// address away. Run again with --https, or with --no-https to turn it off."
+    DISK_GIB="$CURRENT_DISK"
+
+    CURRENT_IMAGE="$(current_parameter Image)"
+    if [ -n "$IMAGE" ] && [ "$IMAGE" != "$CURRENT_IMAGE" ]; then
+        fail "--image only applies when a machine is first created. Changing it here would restart the machine and it would still run the version it runs now. To switch versions, run: deploy/aws/update.sh $NAME --image $IMAGE --region $REGION"
     fi
+    IMAGE=""
+    set_at_first_boot --source "$SOURCE" Source
+    set_at_first_boot --fetch-via "$FETCH_VIA" FetchVia
+    set_at_first_boot --anonymous "$ANONYMOUS" AnonymousS3
+    set_at_first_boot --limit "$LIMIT" Limit
+    set_at_first_boot --bootstrap-url "$BOOTSTRAP_URL" BootstrapUrl
+    SOURCE="$(current_parameter Source)"
+    FETCH_VIA="$(current_parameter FetchVia)"
+    ANONYMOUS="$(current_parameter AnonymousS3)"
+    LIMIT="$(current_parameter Limit)"
+    MACHINE_BOOTSTRAP_URL="$(current_parameter BootstrapUrl)"
+    BOOTSTRAP_URL=""
+
+    CURRENT_HTTPS="$(current_parameter PublicHttps)"
+    [ -n "$CURRENT_HTTPS" ] || CURRENT_HTTPS="false"
+    keep INSTANCE_TYPE InstanceType "Machine type"
+    keep SOURCE_BUCKET SourceBucket "Private bucket the machine may read"
+    keep BUDGET MonthlyBudgetUsd "Spending alert (USD per month)"
+    keep EMAIL BudgetEmail "Spending alert address"
+    keep HTTPS PublicHttps "Public HTTPS"
+    [ "$HTTPS" = "true" ] || keep ALLOWED_CIDR AllowedCidr "Who may open the site"
 else
     IS_UPDATE="false"
     CURRENT_HTTPS="false"
+    MACHINE_BOOTSTRAP_URL="$BOOTSTRAP_URL"
+    [ -n "$SOURCE" ] || fail "--source is required"
+    case "$SOURCE" in
+    s3://* | http://* | https://*) ;;
+    *) fail "the cloud machine cannot see files on this computer. --source must be an s3:// or https:// address" ;;
+    esac
+    [ -n "$ANONYMOUS" ] || ANONYMOUS="false"
+    [ -n "$LIMIT" ] || LIMIT="0"
+    [ -n "$INSTANCE_TYPE" ] || INSTANCE_TYPE="t3.medium"
+    [ -n "$DISK_GIB" ] || DISK_GIB="30"
+    [ -n "$ALLOWED_CIDR" ] || ALLOWED_CIDR="0.0.0.0/0"
+    [ -n "$BUDGET" ] || BUDGET="0"
     MACHINE_IMAGE="$(aws ssm get-parameter --region "$REGION" --name "$LATEST_IMAGE_PARAMETER" \
         --query Parameter.Value --output text)" ||
         fail "could not look up the Amazon Linux image for $REGION."
@@ -125,8 +182,9 @@ esac
 [ -n "$HTTPS" ] || HTTPS="false"
 CLOUDFRONT_PREFIX_LIST=""
 if [ "$HTTPS" = "true" ]; then
-    [ "$ALLOWED_CIDR" = "0.0.0.0/0" ] ||
-        fail "--https opens the site to everyone, so it cannot be combined with --allowed-cidr. Nothing was changed."
+    [ -z "$ALLOWED_CIDR" ] || [ "$ALLOWED_CIDR" = "0.0.0.0/0" ] ||
+        fail "a site served over HTTPS is open to everyone, so --allowed-cidr cannot be used with it. Nothing was changed."
+    ALLOWED_CIDR="0.0.0.0/0"
     CLOUDFRONT_PREFIX_LIST="$(aws ec2 describe-managed-prefix-lists --region "$REGION" \
         --filters Name=prefix-list-name,Values=com.amazonaws.global.cloudfront.origin-facing \
         --query "PrefixLists[0].PrefixListId" --output text)" || CLOUDFRONT_PREFIX_LIST=""
@@ -148,6 +206,13 @@ if [ "$IS_UPDATE" = "true" ]; then
     echo "A deployment named $NAME already exists (machine $EXISTING_INSTANCE)."
     echo "It will be updated in place. The index on its disk and its address are kept."
     echo "If the machine type changes, the site is offline for a few minutes while it restarts."
+    echo
+    if [ "${#CHANGES[@]}" -gt 0 ]; then
+        echo "What changes:"
+        printf '  %s\n' "${CHANGES[@]}"
+    else
+        echo "None of its settings change."
+    fi
     echo
     echo "After the update it will consist of, in AWS account ending in ${ACCOUNT: -4}, region $REGION:"
 else
@@ -201,6 +266,7 @@ aws cloudformation deploy \
     --stack-name "$STACK" \
     --template-file "$HERE/template.yaml" \
     --capabilities CAPABILITY_IAM \
+    --no-fail-on-empty-changeset \
     --tags "dce-collection=$NAME" \
     --parameter-overrides "${overrides[@]}"
 
@@ -220,7 +286,7 @@ if [ "$HTTPS" = "true" ] || [ "$CURRENT_HTTPS" = "true" ]; then
     hops=0
     [ "$HTTPS" = "true" ] && hops=1
     configure_flags=(--set "proxy_hops=$hops" --region "$REGION")
-    [ -n "$BOOTSTRAP_URL" ] && configure_flags+=(--bootstrap-url "$BOOTSTRAP_URL")
+    [ -n "$MACHINE_BOOTSTRAP_URL" ] && configure_flags+=(--bootstrap-url "$MACHINE_BOOTSTRAP_URL")
     "$HERE/configure.sh" "$NAME" "${configure_flags[@]}" ||
         echo "The deployment itself succeeded, but the site cannot tell visitors apart yet. Once the machine runs a current version, run: deploy/aws/configure.sh $NAME --set proxy_hops=$hops --region $REGION"
 fi
@@ -228,7 +294,7 @@ fi
 if [ -n "$COLLECTION_FILE" ]; then
     echo
     describe_flags=(--file "$COLLECTION_FILE" --region "$REGION")
-    [ -n "$BOOTSTRAP_URL" ] && describe_flags+=(--bootstrap-url "$BOOTSTRAP_URL")
+    [ -n "$MACHINE_BOOTSTRAP_URL" ] && describe_flags+=(--bootstrap-url "$MACHINE_BOOTSTRAP_URL")
     "$HERE/describe.sh" "$NAME" "${describe_flags[@]}" ||
         echo "The deployment itself succeeded. Only the description is missing."
 fi
