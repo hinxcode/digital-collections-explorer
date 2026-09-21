@@ -114,8 +114,6 @@ class EmbeddingService:
     ) -> List[Dict[str, Any]]:
         """Search by query embedding; optional score_transform on raw similarities."""
         try:
-            # Rank on the raw similarity. A transform such as SigLIP's sigmoid
-            # saturates at 1.0 for image queries, which would make everything tie.
             scores = torch.matmul(self.embeddings, query_embedding.t()).squeeze()
 
             top_k = min(offset + limit, len(scores))

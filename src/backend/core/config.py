@@ -54,8 +54,6 @@ class Settings(BaseSettings):
     embeddings_dir: str = "data/embeddings"
     thumbnails_dir: str = "data/thumbnails"
 
-    # Root folder of one collection. Image paths in its index are stored relative
-    # to it, so an index built on one machine can be served from another.
     data_dir: str | None = None
 
 
@@ -80,8 +78,6 @@ def load_config(config_path: Path | None = None):
         # Embedding model settings
         model_config = config_data.get("model_config", {})
 
-        # A config that only names a legacy clip_model keeps using CLIP. Otherwise
-        # the type and the name default together, so they can never disagree.
         legacy_clip_model = model_config.get("clip_model")
         default_type = "clip" if legacy_clip_model else DEFAULT_MODEL_TYPE
         model_type = model_config.get("model_type", default_type)

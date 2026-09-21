@@ -89,15 +89,12 @@ function App() {
     };
   }, [route.name, route.query, route.page, uploadedImage]);
 
-  // Going home is a fresh start: the field should not still show the last search.
   useEffect(() => {
     if (route.name === 'home') {
       setSearchQuery('');
     }
   }, [route.name]);
 
-  // An uploaded image lives only in memory, so its results page cannot be reloaded
-  // or shared. Go home rather than show an empty page.
   useEffect(() => {
     if (route.name === 'image-search' && !uploadedImage) {
       navigate('#/');

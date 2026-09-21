@@ -1,14 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 
-/**
- * Routes live in the URL hash so every search and every object has an address
- * that can be bookmarked, shared and cited, without any server configuration.
- *
- *   #/                      home
- *   #/search?q=a+quilt&page=2
- *   #/image-search          results for an uploaded image
- *   #/item/<id>             one object
- */
 const parse = (hash) => {
   const [path, queryString = ''] = hash.replace(/^#/, '').split('?');
   const params = new URLSearchParams(queryString);

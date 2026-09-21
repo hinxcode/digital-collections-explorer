@@ -1,18 +1,9 @@
-"""
-Pick out the catalog fields the site relies on, whatever the collection calls them.
-
-Used when an index is built and again when it is served, so that indexes built
-before these fields were stored still work.
-"""
+"""Pick out the catalog fields the site relies on, whatever the collection calls them."""
 
 from typing import Any, Dict, Optional
 
-# Columns that identify the object an image belongs to. One object often has
-# several photographs, and results are grouped by it.
 OBJECT_ID_KEYS = ("object_id", "record_id", "item_id", "group_id")
 
-# Columns that hold a link to the object's page on the institution's own site.
-# "url" and "image_url" are deliberately absent: they usually point at the file.
 SOURCE_URL_KEYS = ("source_url", "guid", "record_url", "landing_page", "permalink")
 
 

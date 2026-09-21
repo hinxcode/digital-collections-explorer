@@ -1,7 +1,4 @@
-"""
-Browsing a collection: a sample to wander through, single items, similar items,
-and results grouped by object.
-"""
+"""Browsing a collection: samples, single items, similar items, grouped results."""
 
 import json
 import logging
@@ -91,11 +88,7 @@ class CollectionService:
     def sample(
         self, limit: int, seed: Optional[int] = None, offset: int = 0
     ) -> List[Dict[str, Any]]:
-        """Return a varied handful of images: at most one per object.
-
-        The same seed always shuffles the objects the same way, so asking again
-        with a larger offset continues the walk without ever repeating an object.
-        """
+        """Return a varied handful of images, at most one per object, without repeats"""
         self._ensure_index()
         objects = list(self.members)
         random.Random(seed).shuffle(objects)
@@ -141,11 +134,7 @@ class CollectionService:
         exclude_object: Optional[str] = None,
         score_transform: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
     ) -> List[Dict[str, Any]]:
-        """Turn raw similarity scores into results, showing each object only once.
-
-        Ranking always uses the raw scores. score_transform only changes the score
-        that is reported, because a transform can saturate and make results tie.
-        """
+        """Rank by raw similarity, showing each object once; transform only reported scores"""
         self._ensure_index()
         results: List[Dict[str, Any]] = []
         seen = {exclude_object} if exclude_object else set()

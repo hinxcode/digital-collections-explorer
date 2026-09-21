@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
-# Remove everything deploy.sh created for one collection, including its index.
 #
-#   deploy/aws/destroy.sh my-collection
 
 set -euo pipefail
+
+{
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
 
@@ -41,3 +41,6 @@ aws cloudformation delete-stack --region "$REGION" --stack-name "$STACK"
 echo "Deleting. This takes a few minutes..."
 aws cloudformation wait stack-delete-complete --region "$REGION" --stack-name "$STACK"
 echo "Everything created for $NAME has been removed. Billing for it has stopped."
+
+exit 0
+}

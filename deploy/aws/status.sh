@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
-# Show how a deployed collection is doing: the stack, indexing progress, the site.
 #
-#   deploy/aws/status.sh my-collection
 
 set -euo pipefail
+
+{
 
 # Seconds to wait for the machine to answer the progress question.
 COMMAND_TIMEOUT=60
@@ -59,3 +59,6 @@ if curl -fsS -m 5 "$url/api/health" >/dev/null 2>&1; then
 else
     echo "Site is not up yet: $url"
 fi
+
+exit 0
+}

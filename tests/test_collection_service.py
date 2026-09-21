@@ -104,8 +104,6 @@ def test_collection_file_overrides_defaults(service, tmp_path, monkeypatch):
 
 
 def test_a_saturating_score_transform_does_not_scramble_the_ranking(service):
-    # SigLIP reports sigmoid(scale * similarity + bias), which is exactly 1.0 for
-    # every image-to-image similarity. Ranking must not depend on it.
     saturating = lambda scores: torch.ones_like(scores)  # noqa: E731
     raw = torch.tensor([0.31, 0.30, 0.99, 0.32])
     results = service.ranked(raw, limit=10, score_transform=saturating)

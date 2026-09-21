@@ -91,8 +91,7 @@ async def health_check():
 
 
 def collection_name():
-    """Name of the collection being served. A container mounts every collection at
-    the same path, so there the name has to be given with DCE_COLLECTION."""
+    """Name of the collection being served, from DCE_COLLECTION or the data folder"""
     if os.environ.get("DCE_COLLECTION"):
         return os.environ["DCE_COLLECTION"]
     return Path(settings.data_dir).name if settings.data_dir else None

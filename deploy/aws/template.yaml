@@ -14,7 +14,7 @@ Metadata:
       - Label: {default: Spending alert}
         Parameters: [MonthlyBudgetUsd, BudgetEmail]
       - Label: {default: Advanced}
-        Parameters: [Image, BootstrapUrl, LatestAmi]
+        Parameters: [Image, BootstrapUrl, MachineImageId]
 
 Parameters:
   CollectionName:
@@ -75,9 +75,9 @@ Parameters:
   BootstrapUrl:
     Type: String
     Default: https://raw.githubusercontent.com/hinxcode/digital-collections-explorer/main/deploy/bootstrap.sh
-  LatestAmi:
-    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+  MachineImageId:
+    Type: AWS::EC2::Image::Id
+    Description: Amazon Linux 2023 (x86_64) image for the machine. deploy.sh fills this in.
 
 Conditions:
   HasFetchVia: !Not [!Equals [!Ref FetchVia, ""]]
@@ -101,8 +101,6 @@ Resources:
       Tags:
         - {Key: dce-collection, Value: !Ref CollectionName}
 
-  # No SSH. Administrators connect through AWS Systems Manager Session Manager,
-  # so there is no port 22 to expose and no key pair to look after.
   InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -138,12 +136,11 @@ Resources:
   Instance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Ref LatestAmi
+      ImageId: !Ref MachineImageId
       InstanceType: !Ref InstanceType
       IamInstanceProfile: !Ref InstanceProfile
       SecurityGroupIds: [!GetAtt SiteSecurityGroup.GroupId]
-      # Hop limit 2 lets the container, one network hop further in, use the
-      # instance role to read a private bucket.
+      # 2 hops: the container sits one hop behind the instance and needs its role.
       MetadataOptions:
         HttpTokens: required
         HttpPutResponseHopLimit: 2
@@ -170,7 +167,6 @@ Resources:
         - {Key: Name, Value: !Sub "dce-${CollectionName}"}
         - {Key: dce-collection, Value: !Ref CollectionName}
 
-  # A fixed address, so the site keeps its URL when the machine is resized.
   SiteAddress:
     Type: AWS::EC2::EIP
     Properties:

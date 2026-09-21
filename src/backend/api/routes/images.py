@@ -85,7 +85,6 @@ async def get_original_document(id: str):
 
     path = resolve_path(path_str)
 
-    # An index built on another machine points at originals that are not here.
     if not path.exists() and "processed" in doc["metadata"]["paths"]:
         path = resolve_path(doc["metadata"]["paths"]["processed"])
 
