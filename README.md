@@ -245,6 +245,18 @@ description of a site that is already deployed, without touching the machine or 
 deploy/aws/describe.sh my-collection --file collection.json
 ```
 
+To open the site to the public, add `--https`. The site then gets an `https://` address
+from CloudFront, with no domain name or certificate to arrange, and the machine stops
+accepting traffic from anywhere else. CloudFront also keeps copies of the images, which
+takes most of the load off a small machine. It is free up to 1 TB and 10 million requests
+a month. Once a deployment uses `--https`, pass it on every later `deploy.sh` run;
+`--no-https` turns it off again. `--https` cannot be combined with `--allowed-cidr`,
+which is for sites that should stay internal.
+
+```bash
+deploy/aws/deploy.sh my-collection --source s3://bucket/prefix --anonymous --https
+```
+
 To move a deployed site to a newer version without indexing again:
 
 ```bash

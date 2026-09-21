@@ -76,6 +76,8 @@ case "$*" in
     [ "$FAKE_STACK_EXISTS" = "true" ] || grep -q "cloudformation deploy" "$FAKE_AWS_LOG" || exit 255
     echo "i-0existing" ;;
 *"describe-stacks"*"DiskSizeGiB"*) echo "40" ;;
+*"describe-stacks"*"PublicHttps"*) echo "${FAKE_HTTPS:-false}" ;;
+*"describe-managed-prefix-lists"*) echo "pl-0cloudfront" ;;
 *"describe-instances"*"InstanceType"*) echo "c7i.2xlarge" ;;
 *"describe-instances"*) echo "ami-0existing111" ;;
 *"ssm send-command"*)
@@ -132,6 +134,7 @@ def fake_deploy(tmp_path):
         script="deploy.sh",
         machine="current",
         not_ready_for=0,
+        served_over_https=False,
     ):
         import os
 
@@ -146,6 +149,7 @@ def fake_deploy(tmp_path):
             ),
             "FAKE_MACHINE": machine,
             "FAKE_NOT_READY_FOR": str(not_ready_for),
+            "FAKE_HTTPS": "true" if served_over_https else "false",
         }
         if script != "deploy.sh":
             command = ["bash", str(scripts / script), "demo", *extra]
@@ -441,3 +445,45 @@ def test_configure_refuses_anything_that_is_not_a_number(fake_deploy):
     assert result.returncode != 0
     assert "KEY=NUMBER" in result.stderr
     assert not any("ssm send-command" in c for c in calls)
+
+
+def sent_commands(tmp_path):
+    calls = (tmp_path / "aws.log").read_text().splitlines()
+    return [c for c in calls if "ssm send-command" in c]
+
+
+def test_https_lets_only_cloudfront_reach_the_machine(fake_deploy, tmp_path):
+    result, deploys = fake_deploy(False, "--https")
+    assert result.returncode == 0, result.stderr
+    assert "PublicHttps=true" in deploys[0]
+    assert "CloudFrontPrefixList=pl-0cloudfront" in deploys[0]
+    assert "from CloudFront only" in result.stdout
+    assert "configure --name demo --set proxy_hops=1" in sent_commands(tmp_path)[-1]
+
+
+def test_a_plain_deployment_never_trusts_forwarded_addresses(fake_deploy, tmp_path):
+    result, deploys = fake_deploy(False)
+    assert result.returncode == 0, result.stderr
+    assert "PublicHttps=false" in deploys[0]
+    assert sent_commands(tmp_path) == []
+
+
+def test_https_cannot_be_combined_with_a_restricted_audience(fake_deploy):
+    result, deploys = fake_deploy(False, "--https", "--allowed-cidr", "10.0.0.0/8")
+    assert result.returncode != 0
+    assert deploys == []
+    assert "cannot be combined" in result.stderr
+
+
+def test_an_update_never_drops_https_by_omission(fake_deploy):
+    result, deploys = fake_deploy(True, served_over_https=True)
+    assert result.returncode != 0
+    assert deploys == []
+    assert "--no-https" in result.stderr
+
+
+def test_turning_https_off_stops_trusting_forwarded_addresses(fake_deploy, tmp_path):
+    result, deploys = fake_deploy(True, "--no-https", served_over_https=True)
+    assert result.returncode == 0, result.stderr
+    assert "PublicHttps=false" in deploys[0]
+    assert "configure --name demo --set proxy_hops=0" in sent_commands(tmp_path)[-1]

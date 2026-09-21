@@ -40,3 +40,16 @@ def test_container_can_name_the_collection_it_serves(backend, monkeypatch):
     monkeypatch.setattr(backend.settings, "data_dir", "/data")
     monkeypatch.setenv("DCE_COLLECTION", "maps-of-ohio")
     assert backend.collection_name() == "maps-of-ohio"
+
+
+def test_images_may_be_kept_by_browsers_and_a_cdn(backend, monkeypatch, tmp_path):
+    from src.backend.api.routes import images
+
+    picture = tmp_path / "a.jpg"
+    picture.write_bytes(b"jpeg")
+    document = {"metadata": {"paths": {"processed": str(picture)}}}
+    monkeypatch.setattr(
+        images.embedding_service, "get_document_by_id", lambda item_id: document
+    )
+    response = asyncio.run(images.get_image_by_id("a", size="full"))
+    assert response.headers["cache-control"] == "public, max-age=86400"
