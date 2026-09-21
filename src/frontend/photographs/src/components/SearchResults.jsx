@@ -41,8 +41,8 @@ const SearchResults = React.memo(({
       <div className="results-heading">
         <h2>{heading}</h2>
         <p>
-          Each object appears once. A number such as +3 means there are more photos of
-          it. Ranked by an AI model, best matches first.
+          Each object appears once, even when it has several photos. Ranked by an AI
+          model, best matches first.
         </p>
       </div>
       <ImageGrid items={items} />

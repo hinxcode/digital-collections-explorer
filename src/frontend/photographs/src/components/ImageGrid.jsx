@@ -16,20 +16,28 @@ const aspectRatioOf = (item) => {
   return Math.min(MAX_ASPECT_RATIO, Math.max(MIN_ASPECT_RATIO, ratio));
 };
 
+const PhotosIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <rect x="3" y="7" width="14" height="13" rx="2" />
+    <path d="M7 4h12a2 2 0 0 1 2 2v11" />
+  </svg>
+);
+
 const ImageGrid = React.memo(({ items, size = 'regular' }) => (
   <ul className={`image-grid image-grid-${size}`}>
     {items.map((item) => {
       const title = titleOf(item);
-      const extraImages = (item.image_count || 1) - 1;
+      const photoCount = item.image_count || 1;
 
       return (
         <li key={item.id} className="image-grid-cell" style={{ '--ratio': aspectRatioOf(item) }}>
           <a href={itemHref(item.id)} aria-label={title || 'Uncatalogued image'}>
             <img src={`/images/${item.id}?size=thumbnail`} alt={title || ''} loading="lazy" />
             <span className="image-grid-caption">{title || 'Uncatalogued image'}</span>
-            {extraImages > 0 && (
-              <span className="image-grid-badge" title={`${extraImages} more photos of this object`}>
-                +{extraImages}
+            {photoCount > 1 && (
+              <span className="image-grid-badge">
+                <PhotosIcon />
+                {photoCount} photos
               </span>
             )}
           </a>

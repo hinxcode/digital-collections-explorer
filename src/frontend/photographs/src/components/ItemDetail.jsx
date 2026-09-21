@@ -1,13 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Lightbox from 'yet-another-react-lightbox';
 import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import 'yet-another-react-lightbox/styles.css';
 import ImageGrid from './ImageGrid';
+import { itemHref } from '../hooks/useHashRoute';
 import { getItem, getSimilar } from '../services/api';
 import { titleOf } from '../services/items';
 import './ItemDetail.css';
 
 const SIMILAR_COUNT = 24;
+
+const fullImage = (id) => `/images/${id}?size=full`;
+const thumbnail = (id) => `/images/${id}?size=thumbnail`;
 
 const hostnameOf = (url) => {
   try {
@@ -17,29 +21,86 @@ const hostnameOf = (url) => {
   }
 };
 
+const Chevron = ({ direction }) => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d={direction === 'left' ? 'M15 5l-7 7 7 7' : 'M9 5l7 7-7 7'} />
+  </svg>
+);
+
 function ItemDetail({ id, collection }) {
-  const [item, setItem] = useState(null);
+  const [object, setObject] = useState(null);
+  const [currentId, setCurrentId] = useState(id);
   const [similar, setSimilar] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [zoomIsOpen, setZoomIsOpen] = useState(false);
 
+  const photos = useMemo(() => object?.photos || [], [object]);
+  const currentIndex = Math.max(0, photos.findIndex((photo) => photo.id === currentId));
+  const current = photos[currentIndex];
+
   useEffect(() => {
     let isCurrent = true;
-    setItem(null);
-    setSimilar([]);
+    setIsLoading(true);
     setError(null);
 
     getItem(id)
-      .then((loaded) => isCurrent && setItem(loaded))
-      .catch(() => isCurrent && setError('This item could not be found.'));
-    getSimilar(id, SIMILAR_COUNT)
-      .then((loaded) => isCurrent && setSimilar(loaded))
-      .catch(() => isCurrent && setSimilar([]));
+      .then((loaded) => {
+        if (isCurrent) {
+          setObject(loaded);
+          setCurrentId(id);
+        }
+      })
+      .catch(() => isCurrent && setError('This item could not be found.'))
+      .finally(() => isCurrent && setIsLoading(false));
 
     return () => {
       isCurrent = false;
     };
   }, [id]);
+
+  useEffect(() => {
+    let isCurrent = true;
+    getSimilar(currentId, SIMILAR_COUNT)
+      .then((loaded) => isCurrent && setSimilar(loaded))
+      .catch(() => {});
+    return () => {
+      isCurrent = false;
+    };
+  }, [currentId]);
+
+  useEffect(() => {
+    [photos[currentIndex - 1], photos[currentIndex + 1]].filter(Boolean).forEach((photo) => {
+      new Image().src = fullImage(photo.id);
+    });
+  }, [photos, currentIndex]);
+
+  const showPhoto = useCallback((photoId) => {
+    setCurrentId(photoId);
+    window.history.replaceState(null, '', itemHref(photoId));
+  }, []);
+
+  const step = useCallback((offset) => {
+    const next = photos[currentIndex + offset];
+    if (next) {
+      showPhoto(next.id);
+    }
+  }, [photos, currentIndex, showPhoto]);
+
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (zoomIsOpen || e.target.matches('input, textarea')) {
+        return;
+      }
+      if (e.key === 'ArrowLeft') {
+        step(-1);
+      } else if (e.key === 'ArrowRight') {
+        step(1);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [step, zoomIsOpen]);
 
   if (error) {
     return (
@@ -50,7 +111,7 @@ function ItemDetail({ id, collection }) {
     );
   }
 
-  if (!item) {
+  if (!current) {
     return (
       <div className="loading-indicator">
         <div className="spinner"></div>
@@ -58,15 +119,15 @@ function ItemDetail({ id, collection }) {
     );
   }
 
-  const { metadata } = item;
-  const title = titleOf(item);
+  const { metadata } = current;
+  const title = titleOf(current);
   const sourceUrl = metadata.source_url;
   const sourceName = collection?.source_name || (sourceUrl && hostnameOf(sourceUrl));
   const license = collection?.license;
-  const fullImage = `/images/${item.id}?size=full`;
+  const hasSeveralPhotos = photos.length > 1;
 
   return (
-    <article className="item-detail">
+    <article className={`item-detail ${isLoading ? 'item-detail-loading' : ''}`}>
       <nav className="item-detail-nav">
         <button type="button" className="link-button" onClick={() => window.history.back()}>
           ← Back
@@ -75,14 +136,66 @@ function ItemDetail({ id, collection }) {
       </nav>
 
       <div className="item-detail-main">
-        <button
-          type="button"
-          className="item-detail-image"
-          onClick={() => setZoomIsOpen(true)}
-          aria-label="View larger"
-        >
-          <img src={fullImage} alt={title || 'Uncatalogued image'} />
-        </button>
+        <div className="item-detail-viewer">
+          <div className="item-detail-stage">
+            <button
+              type="button"
+              className="item-detail-image"
+              onClick={() => setZoomIsOpen(true)}
+              aria-label="View larger"
+            >
+              <img src={fullImage(current.id)} alt={title || 'Uncatalogued image'} />
+            </button>
+            {hasSeveralPhotos && (
+              <>
+                <button
+                  type="button"
+                  className="item-detail-step item-detail-step-previous"
+                  onClick={() => step(-1)}
+                  disabled={currentIndex === 0}
+                  aria-label="Previous photo"
+                >
+                  <Chevron direction="left" />
+                </button>
+                <button
+                  type="button"
+                  className="item-detail-step item-detail-step-next"
+                  onClick={() => step(1)}
+                  disabled={currentIndex === photos.length - 1}
+                  aria-label="Next photo"
+                >
+                  <Chevron direction="right" />
+                </button>
+              </>
+            )}
+          </div>
+
+          {hasSeveralPhotos && (
+            <div className="item-detail-photos">
+              <p>
+                {photos.length} photos of this object. Showing photo {currentIndex + 1}.
+              </p>
+              <ul>
+                {photos.map((photo, index) => (
+                  <li key={photo.id}>
+                    <a
+                      href={itemHref(photo.id)}
+                      className={photo.id === current.id ? 'is-current' : ''}
+                      aria-current={photo.id === current.id ? 'true' : undefined}
+                      aria-label={`Photo ${index + 1} of ${photos.length}`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        showPhoto(photo.id);
+                      }}
+                    >
+                      <img src={thumbnail(photo.id)} alt="" loading="lazy" />
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
 
         <div className="item-detail-facts">
           <h2>{title || 'Uncatalogued image'}</h2>
@@ -101,16 +214,10 @@ function ItemDetail({ id, collection }) {
           )}
 
           <dl>
-            {item.object_id !== item.id && (
+            {current.object_id !== current.id && (
               <>
                 <dt>Object</dt>
-                <dd>{item.object_id}</dd>
-              </>
-            )}
-            {item.image_count > 1 && (
-              <>
-                <dt>Photos of this object</dt>
-                <dd>{item.image_count}</dd>
+                <dd>{current.object_id}</dd>
               </>
             )}
             {metadata.width && metadata.height && (
@@ -134,13 +241,6 @@ function ItemDetail({ id, collection }) {
         </div>
       </div>
 
-      {item.same_object.length > 0 && (
-        <section>
-          <h3>More photos of this object</h3>
-          <ImageGrid items={item.same_object} size="small" />
-        </section>
-      )}
-
       {similar.length > 0 && (
         <section>
           <h3>Looks similar</h3>
@@ -155,10 +255,11 @@ function ItemDetail({ id, collection }) {
       <Lightbox
         open={zoomIsOpen}
         close={() => setZoomIsOpen(false)}
-        slides={[{ src: fullImage, alt: title || '' }]}
+        index={currentIndex}
+        slides={photos.map((photo) => ({ src: fullImage(photo.id), alt: title || '' }))}
+        on={{ view: ({ index }) => photos[index] && showPhoto(photos[index].id) }}
         plugins={[Zoom]}
         carousel={{ finite: true }}
-        render={{ buttonPrev: () => null, buttonNext: () => null }}
       />
     </article>
   );

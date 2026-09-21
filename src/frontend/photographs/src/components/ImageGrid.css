@@ -79,13 +79,25 @@
 .image-grid-badge {
   position: absolute;
   top: 6px;
-  right: 6px;
-  padding: 1px 7px;
+  left: 6px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
   font-size: 0.75rem;
-  font-weight: 700;
   color: #f8f5f0;
-  background-color: rgba(0, 0, 0, 0.7);
-  border-radius: 10px;
+  background-color: rgba(0, 0, 0, 0.72);
+  border-radius: 4px;
+}
+
+.image-grid-badge svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 @media (max-width: 600px) {

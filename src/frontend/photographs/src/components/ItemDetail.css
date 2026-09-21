@@ -38,24 +38,125 @@
   margin-bottom: 3rem;
 }
 
-.item-detail-image {
-  padding: 0;
-  background: #1e1e1e;
-  border: none;
+.item-detail-loading {
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+}
+
+.item-detail-stage {
+  position: relative;
+  height: min(64vh, 640px);
+  background: #1a1a1a;
   border-radius: 4px;
-  cursor: zoom-in;
   overflow: hidden;
 }
 
+.item-detail-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+  cursor: zoom-in;
+}
+
 .item-detail-image:hover {
-  background: #1e1e1e;
+  background: none;
 }
 
 .item-detail-image img {
   display: block;
   width: 100%;
-  max-height: 72vh;
+  height: 100%;
   object-fit: contain;
+}
+
+.item-detail-step {
+  position: absolute;
+  top: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  color: #f8f5f0;
+  background-color: rgba(0, 0, 0, 0.55);
+  border-radius: 50%;
+  transform: translateY(-50%);
+  transition: background-color 0.2s ease, opacity 0.2s ease;
+}
+
+.item-detail-step:hover:not(:disabled) {
+  background-color: rgba(0, 0, 0, 0.8);
+}
+
+.item-detail-step:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.item-detail-step-previous {
+  left: 12px;
+}
+
+.item-detail-step-next {
+  right: 12px;
+}
+
+.item-detail-step svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.item-detail-photos p {
+  margin: 0.9rem 0 0.6rem;
+  font-size: 0.9rem;
+  color: #b0b0b0;
+}
+
+.item-detail-photos ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item-detail-photos a {
+  display: block;
+  width: 76px;
+  height: 76px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  opacity: 0.6;
+  transition: opacity 0.2s ease, border-color 0.2s ease;
+}
+
+.item-detail-photos a:hover,
+.item-detail-photos a:focus-visible,
+.item-detail-photos a.is-current {
+  opacity: 1;
+}
+
+.item-detail-photos a.is-current {
+  border-color: #d0b49f;
+}
+
+.item-detail-photos img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .item-detail-facts h2 {
