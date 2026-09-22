@@ -1,13 +1,14 @@
 # Digital Collections Explorer
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15744570.svg)](https://doi.org/10.5281/zenodo.15744570)
+[![Paper](https://img.shields.io/badge/paper-Computational%20Humanities%20Research-blue.svg)](https://doi.org/10.1017/chr.2025.10017)
 [![arXiv](https://img.shields.io/badge/arXiv-2507.00961-b31b1b.svg)](https://arxiv.org/abs/2507.00961)
 
 **Digital Collections Explorer is an open-source search site for image collections that have little or no metadata.** A library, archive or museum points it at a folder, an S3 bucket or a manifest of images. Visitors can then search the collection in plain language ("a steam locomotive", "a handwritten letter with a red seal"), search with a picture, wander through it, and follow every image back to the institution's own record. No catalog, tags or OCR are needed: search compares the meaning of the words with the content of the images, using a multimodal embedding model (SigLIP by default, CLIP optionally).
 
 It indexes hundreds of thousands of images on ordinary hardware, serves them from one small machine without a GPU, and can be installed locally or deployed to a server or AWS with one command. A public demo runs at [digital-collections-explorer.com](https://digital-collections-explorer.com/).
 
-The software is built by the [Lab for Computing Cultural Heritage](https://l4cch.github.io/lab-website/) at the University of Washington Information School and is described in [our paper](https://arxiv.org/abs/2507.00961). To cite it, see [Citation](#citation).
+The software is built by the [Lab for Computing Cultural Heritage](https://l4cch.github.io/lab-website/) at the University of Washington Information School and is described in [our paper in *Computational Humanities Research*](https://doi.org/10.1017/chr.2025.10017). To cite it, see [Citation](#citation).
 
 ![A diagram showing an overview of our Digital Collections Explorer, including its various components.](https://github.com/hinxcode/digital-collections-explorer/blob/main/overview.png)
 
@@ -382,15 +383,17 @@ Then restart the backend server to serve the updated frontend.
 
 ## Citation
 
-If you use Digital Collections Explorer in research, please cite the paper and the software release you used. Every release has its own DOI on [Zenodo](https://doi.org/10.5281/zenodo.15744570).
+If you use Digital Collections Explorer in research, please cite the paper and the software release you used. Every release has its own DOI on [Zenodo](https://doi.org/10.5281/zenodo.15744570). The paper is open access in [*Computational Humanities Research*](https://doi.org/10.1017/chr.2025.10017), and the preprint is on [arXiv](https://arxiv.org/abs/2507.00961).
 
 ```bibtex
 @article{huang2025digitalcollectionsexplorer,
   title   = {Digital Collections Explorer: An Open-Source, Multimodal Viewer for Searching Digital Collections},
   author  = {Huang, Ying-Hsiang and Lee, Benjamin Charles Germain},
-  journal = {arXiv preprint arXiv:2507.00961},
+  journal = {Computational Humanities Research},
+  volume  = {1},
+  pages   = {e14},
   year    = {2025},
-  doi     = {10.48550/arXiv.2507.00961}
+  doi     = {10.1017/chr.2025.10017}
 }
 ```
 

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 PROJECT_URL = "https://github.com/hinxcode/digital-collections-explorer"
-PAPER_URL = "https://arxiv.org/abs/2507.00961"
+PAPER_URL = "https://doi.org/10.1017/chr.2025.10017"
 
 ROBOTS_TXT = """\
 # This collection is public. Search engines and AI assistants are welcome to read it.
