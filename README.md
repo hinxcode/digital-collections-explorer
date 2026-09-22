@@ -221,29 +221,10 @@ sudo deploy/bootstrap.sh describe --name my-collection --collection-file collect
 
 ### Under a path on an existing website
 
-A site does not need a domain of its own. It can live at a path such as
-`https://library.example.org/maps/`, with the institution's web server passing that path
-to it. Tell the site its path with `DCE_BASE_PATH`, or `--base-path` with the bootstrap
-script, or `BASE_PATH` with Docker Compose. It does not matter whether the proxy strips
-the path or leaves it in place.
-
-```bash
-DCE_BASE_PATH=/maps DCE_DATA_DIR=data/collections/my-collection python -m src.backend.main
-sudo deploy/bootstrap.sh install --name maps --source /path/to/images --base-path /maps
-BASE_PATH=/maps COLLECTION=maps docker compose up serve
-```
-
-The matching nginx location, with the site on port 8000:
-
-```nginx
-location /maps/ {
-    proxy_pass http://127.0.0.1:8000/;
-    proxy_set_header Host $host;
-}
-```
-
-Crawlers read only the `robots.txt` at the root of the domain, so the line that keeps
-them off the search endpoints has to go there. `/maps/robots.txt` shows what to add.
+A site can also live at a path such as `https://library.example.org/maps/`. Set
+`DCE_BASE_PATH`, or `--base-path` with the bootstrap script, or `BASE_PATH` with Docker
+Compose. The proxy configuration and the `robots.txt` to add at the root of the domain are
+covered in the [documentation](https://digital-collections-explorer.com/docs/deploy/under-a-path/).
 
 ### AWS
 
