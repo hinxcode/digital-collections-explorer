@@ -3,7 +3,7 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15744570.svg)](https://doi.org/10.5281/zenodo.15744570)
 [![arXiv](https://img.shields.io/badge/arXiv-2507.00961-b31b1b.svg)](https://arxiv.org/abs/2507.00961)
 
-**Digital Collections Explorer is an open-source search site for image collections that have little or no metadata.** A library, archive or museum points it at a folder, an S3 bucket or a manifest of images. Visitors can then search the collection in plain language ("a steam locomotive", "a handwritten letter with a red seal"), search with a picture, wander through it, and follow every image back to the institution's own record. No catalogue, tags or OCR are needed: search compares the meaning of the words with the content of the images, using a multimodal embedding model (SigLIP by default, CLIP optionally).
+**Digital Collections Explorer is an open-source search site for image collections that have little or no metadata.** A library, archive or museum points it at a folder, an S3 bucket or a manifest of images. Visitors can then search the collection in plain language ("a steam locomotive", "a handwritten letter with a red seal"), search with a picture, wander through it, and follow every image back to the institution's own record. No catalog, tags or OCR are needed: search compares the meaning of the words with the content of the images, using a multimodal embedding model (SigLIP by default, CLIP optionally).
 
 It indexes hundreds of thousands of images on ordinary hardware, serves them from one small machine without a GPU, and can be installed locally or deployed to a server or AWS with one command. A public demo runs at [digital-collections-explorer.com](https://digital-collections-explorer.com/).
 
@@ -23,7 +23,7 @@ The software is built by the [Lab for Computing Cultural Heritage](https://l4cch
 ## What It Does
 
 - **Searches by meaning.** Natural-language queries and reverse image search over photographs, maps and born-digital documents (PDFs), in one interface.
-- **Needs no metadata.** Uncatalogued collections work as they are. When a catalogue exists, its columns group images into objects and link each image back to the original record.
+- **Needs no metadata.** Uncataloged collections work as they are. When a catalog exists, its columns group images into objects and link each image back to the original record.
 - **Comes with three interfaces.** `photographs` opens on a wall of images to wander through and gives every image its own page. `maps` adds a lightbox and image upload. `documents` previews and searches PDFs page by page.
 - **Scales on ordinary hardware.** Indexing is resumable and reads from disk, S3 or a parquet manifest without copying the originals. Serving needs no GPU.
 - **Is safe to put on the internet.** Rate limits, upload limits and concurrency limits protect a small machine. Every refusal is explained to the visitor in plain words.
@@ -31,7 +31,7 @@ The software is built by the [Lab for Computing Cultural Heritage](https://l4cch
 
 ## How It Differs
 
-- **From a catalogue search:** a catalogue finds what someone has already described. Digital Collections Explorer finds what is in the image, so it works on the boxes nobody has had time to catalogue.
+- **From a catalog search:** a catalog finds what someone has already described. Digital Collections Explorer finds what is in the image, so it works on the boxes nobody has had time to catalog.
 - **From an image viewer (IIIF, Mirador):** viewers display images that were found some other way. This is the finding part, and it links out to your existing viewer or record.
 - **From a hosted AI search service:** this runs on your own machine or cloud account. Your images never leave it, there is no per-query fee, and the code is open.
 
@@ -100,7 +100,7 @@ The API server will start at http://localhost:8000
 ## Large, Remote, or Unsorted Collections
 
 The steps above expect your images in `data/raw`. When a collection is too large for
-your disk, lives in an S3 bucket, or has never been organised, use the tools below
+your disk, lives in an S3 bucket, or has never been organized, use the tools below
 instead. They need no metadata and never store the original images.
 
 ```bash
@@ -162,7 +162,7 @@ shows each object once however many photos it has, and gives every image its own
 with similar images and a link back to the institution's own record.
 
 Put a `collection.json` next to the index (in the folder you pass to `--data-dir`) to
-set the title, the introduction, the suggested searches, the licence and the footer
+set the title, the introduction, the suggested searches, the license and the footer
 links. `collection.example.json` shows every field. All of them are optional. The site
 reads the file on every visit, so a change shows up without a restart. For a deployed
 site, see `--collection-file` and `describe` below.
@@ -171,7 +171,7 @@ The link back to the original record is taken from the catalog: a column named
 `source_url`, `guid`, `record_url`, `landing_page` or `permalink` that holds a web
 address. Images are grouped into objects by a column named `object_id`, `record_id`,
 `item_id` or `group_id`. Collections without a catalog still work: every image is
-then its own object and is shown as uncatalogued.
+then its own object and is shown as uncataloged.
 
 ## Limits That Protect a Public Site
 

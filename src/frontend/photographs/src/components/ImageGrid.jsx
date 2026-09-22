@@ -32,9 +32,9 @@ const ImageGrid = React.memo(({ items, size = 'regular' }) => (
 
       return (
         <li key={item.id} className="image-grid-cell" style={{ '--ratio': aspectRatioOf(item) }}>
-          <a href={itemHref(item.id)} aria-label={title || 'Uncatalogued image'}>
+          <a href={itemHref(item.id)} aria-label={title || 'Uncataloged image'}>
             <img src={imageUrl(item.id, 'thumbnail')} alt={title || ''} loading="lazy" />
-            <span className="image-grid-caption">{title || 'Uncatalogued image'}</span>
+            <span className="image-grid-caption">{title || 'Uncataloged image'}</span>
             {photoCount > 1 && (
               <span className="image-grid-badge">
                 <PhotosIcon />

@@ -10,7 +10,7 @@ from src.backend.services.embedding_service import EmbeddingService
 SI_PAGE = "https://n2t.net/ark:/65665/ng49ca746a6"
 
 
-def catalogued(record_id, title):
+def cataloged(record_id, title):
     return {"catalog": {"record_id": record_id, "title": title, "guid": SI_PAGE}}
 
 
@@ -19,9 +19,9 @@ def service():
     embeddings = EmbeddingService()
     embeddings.item_ids = ["quilt-front", "quilt-back", "rifle", "loose-photo"]
     embeddings.metadata = {
-        "quilt-front": catalogued("nmah_1", "Star Quilt"),
-        "quilt-back": catalogued("nmah_1", "Star Quilt"),
-        "rifle": catalogued("nmah_2", "Percussion Rifle"),
+        "quilt-front": cataloged("nmah_1", "Star Quilt"),
+        "quilt-back": cataloged("nmah_1", "Star Quilt"),
+        "rifle": cataloged("nmah_2", "Percussion Rifle"),
         "loose-photo": {"file_name": "scan_0042.jpg"},
     }
     embeddings.embeddings = torch.nn.functional.normalize(
@@ -72,7 +72,7 @@ def test_item_lists_every_photo_of_its_object_including_itself(service):
     assert len(front["photos"]) == front["image_count"]
 
 
-def test_uncatalogued_image_is_its_own_object_with_no_link(service):
+def test_uncataloged_image_is_its_own_object_with_no_link(service):
     item = service.item("loose-photo")
     assert item["metadata"]["source_url"] is None
     assert item["image_count"] == 1

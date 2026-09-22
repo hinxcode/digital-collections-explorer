@@ -110,7 +110,7 @@ const getJson = async (path) => {
 };
 
 /**
- * Describe the collection: title, size, suggested searches, licence and links
+ * Describe the collection: title, size, suggested searches, license and links
  * @returns {Promise<Object>}
  */
 export const getCollection = () => getJson('/api/collection');

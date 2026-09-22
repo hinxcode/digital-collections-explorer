@@ -519,7 +519,7 @@ def file_derived_fields(
                 sample_values=dates[:3],
                 note=f"When each picture was taken, read from EXIF in "
                 f"{deep['sampled']} sampled images{span}. For scanned or photographed "
-                f"objects this is the digitisation date, not the date of the object.",
+                f"objects this is the digitization date, not the date of the object.",
             )
         )
     else:

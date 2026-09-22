@@ -72,13 +72,13 @@ def llms_txt(collection: Dict[str, Any], base_path: str = "") -> str:
         lines += [f"This site holds {' in '.join(counts)}.", ""]
     if collection.get("source_name"):
         lines += [f"The images come from {collection['source_name']}.", ""]
-    licence = collection.get("license") or {}
-    if licence.get("name"):
-        note = f" ({licence['note']})" if licence.get("note") else ""
-        lines += [f"Licence: {licence['name']}{note}.", ""]
+    license_info = collection.get("license") or {}
+    if license_info.get("name"):
+        note = f" ({license_info['note']})" if license_info.get("note") else ""
+        lines += [f"License: {license_info['name']}{note}.", ""]
     lines += [
         "Visitors search the collection by describing what they are looking for in plain",
-        "language, or by uploading a picture. No catalogue or metadata is needed: search",
+        "language, or by uploading a picture. No catalog or metadata is needed: search",
         "compares the meaning of the words with the content of the images.",
         "",
         "## Searching",

@@ -74,7 +74,7 @@ def test_llms_txt_describes_the_collection_and_its_api():
     assert text.startswith("# National Museum of American History\n\n> Wander")
     assert "12,345 images in 6,789 objects" in text
     assert "The images come from the Smithsonian." in text
-    assert "Licence: CC0 (public domain) (via Smithsonian Open Access)." in text
+    assert "License: CC0 (public domain) (via Smithsonian Open Access)." in text
     assert "- [Text search](/api/search/text" in text
     assert "- [Smithsonian Open Access](https://www.si.edu/openaccess)" in text
     assert site_pages.PROJECT_URL in text
@@ -83,7 +83,7 @@ def test_llms_txt_describes_the_collection_and_its_api():
 def test_llms_txt_leaves_out_what_the_collection_does_not_say():
     text = site_pages.llms_txt({"title": "Maps"})
     assert "This site holds" not in text
-    assert "Licence" not in text
+    assert "License" not in text
     assert "The images come from" not in text
 
 
