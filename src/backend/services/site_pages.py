@@ -13,7 +13,7 @@ ROBOTS_TXT = """\
 # Only the search endpoints are kept off limits: they are the one costly thing the site does.
 User-agent: *
 Allow: /
-Disallow: /api/search/
+Disallow: {base_path}/api/search/
 
 User-agent: GPTBot
 Allow: /
@@ -27,6 +27,12 @@ Allow: /
 User-agent: Google-Extended
 Allow: /
 """
+
+
+def robots_txt(base_path: str = "") -> str:
+    """Welcome crawlers and keep them off the search endpoints, wherever the site lives"""
+    return ROBOTS_TXT.format(base_path=base_path)
+
 
 TITLE = re.compile(r"<title>.*?</title>", re.DOTALL)
 DESCRIPTION = re.compile(r'<meta name="description" content=".*?"\s*/?>', re.DOTALL)
@@ -52,7 +58,7 @@ def home_page(index_html: str, collection: Dict[str, Any]) -> str:
     return page.replace("</head>", f"{tags}\n  </head>", 1)
 
 
-def llms_txt(collection: Dict[str, Any]) -> str:
+def llms_txt(collection: Dict[str, Any], base_path: str = "") -> str:
     """Describe the site to AI assistants in the llms.txt format"""
     title = collection.get("title") or "Digital Collections Explorer"
     description = collection.get("description") or ""
@@ -77,11 +83,13 @@ def llms_txt(collection: Dict[str, Any]) -> str:
         "",
         "## Searching",
         "",
-        "- [Text search](/api/search/text?query=a+steam+locomotive): "
+        f"- [Text search]({base_path}/api/search/text?query=a+steam+locomotive): "
         "GET with `query`, optional `limit` and `page`; returns ranked images",
-        "- [Image search](/api/search/image): POST an image file; returns similar images",
-        "- [About this collection](/api/collection): title, size, suggested searches",
-        "- [API reference](/docs): every endpoint, as OpenAPI",
+        f"- [Image search]({base_path}/api/search/image): "
+        "POST an image file; returns similar images",
+        f"- [About this collection]({base_path}/api/collection): "
+        "title, size, suggested searches",
+        f"- [API reference]({base_path}/docs): every endpoint, as OpenAPI",
         "",
         "## Software",
         "",

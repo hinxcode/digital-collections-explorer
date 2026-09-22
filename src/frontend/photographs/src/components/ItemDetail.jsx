@@ -4,14 +4,14 @@ import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import 'yet-another-react-lightbox/styles.css';
 import ImageGrid from './ImageGrid';
 import { itemHref } from '../hooks/useHashRoute';
-import { getItem, getSimilar } from '../services/api';
+import { getItem, getSimilar, imageUrl } from '../services/api';
 import { titleOf } from '../services/items';
 import './ItemDetail.css';
 
 const SIMILAR_COUNT = 24;
 
-const fullImage = (id) => `/images/${id}?size=full`;
-const thumbnail = (id) => `/images/${id}?size=thumbnail`;
+const fullImage = (id) => imageUrl(id, 'full');
+const thumbnail = (id) => imageUrl(id, 'thumbnail');
 
 const hostnameOf = (url) => {
   try {

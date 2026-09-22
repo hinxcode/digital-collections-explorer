@@ -15,6 +15,7 @@ FETCH_VIA=""
 ANONYMOUS="false"
 LIMIT=""
 PORT="8000"
+BASE_PATH=""
 KEEP_DATA="false"
 AS_JSON="false"
 COLLECTION_FILE=""
@@ -35,6 +36,7 @@ install options:
   --anonymous         read S3 without credentials (public buckets)
   --limit N           only index the first N images
   --port PORT         port for the site (default 8000)
+  --base-path PATH    serve the site under this path, e.g. /maps, behind a proxy
   --image IMAGE       container image to run
   --image-tar FILE    load the image from a file instead of downloading it
   --data-root DIR     where collections are stored (default /opt/dce)
@@ -73,6 +75,7 @@ parse_args() {
         --anonymous) ANONYMOUS="true"; shift ;;
         --limit) LIMIT="$2"; shift 2 ;;
         --port) PORT="$2"; shift 2 ;;
+        --base-path) BASE_PATH="$2"; shift 2 ;;
         --image) IMAGE="$2"; IMAGE_WAS_GIVEN="true"; shift 2 ;;
         --image-tar) IMAGE_TAR="$2"; shift 2 ;;
         --data-root) DATA_ROOT="$2"; shift 2 ;;
@@ -160,7 +163,7 @@ fi
 
 docker rm -f $SERVICE >/dev/null 2>&1 || true
 exec docker run --rm --name $SERVICE \\
-    -p $PORT:8000 -e DCE_COLLECTION=$NAME \\
+    -p $PORT:8000 -e DCE_COLLECTION=$NAME -e DCE_BASE_PATH=$BASE_PATH \\
     -v "$COLLECTION_DIR:/data" \\
     "$IMAGE" serve
 EOF

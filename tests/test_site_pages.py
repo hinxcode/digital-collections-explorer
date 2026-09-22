@@ -54,9 +54,18 @@ def test_home_page_adds_tags_when_the_template_has_none():
 
 
 def test_robots_welcome_crawlers_but_not_on_the_search_endpoints():
-    assert "User-agent: *\nAllow: /\nDisallow: /api/search/" in site_pages.ROBOTS_TXT
-    assert "User-agent: ClaudeBot\nAllow: /" in site_pages.ROBOTS_TXT
-    assert "GPTBot" in site_pages.ROBOTS_TXT
+    robots = site_pages.robots_txt()
+    assert "User-agent: *\nAllow: /\nDisallow: /api/search/" in robots
+    assert "User-agent: ClaudeBot\nAllow: /" in robots
+    assert "GPTBot" in robots
+
+
+def test_crawler_pages_follow_the_site_under_a_base_path():
+    assert "Disallow: /maps/api/search/" in site_pages.robots_txt("/maps")
+    text = site_pages.llms_txt(SMITHSONIAN, "/maps")
+    assert "- [Text search](/maps/api/search/text" in text
+    assert "- [API reference](/maps/docs)" in text
+    assert "](/api/" not in text
 
 
 def test_llms_txt_describes_the_collection_and_its_api():
@@ -111,3 +120,51 @@ def test_pages_survive_an_index_that_cannot_be_read(backend, monkeypatch):
     monkeypatch.setattr(backend.collection_service, "info", broken)
     text = asyncio.run(backend.llms()).body.decode()
     assert text.startswith("# Digital Collection Explorer")
+
+
+def test_base_path_is_normalized_from_the_environment():
+    from src.backend.core.config import normalize_base_path
+
+    assert normalize_base_path("maps/") == "/maps"
+    assert normalize_base_path("/maps") == "/maps"
+    assert normalize_base_path("/") == ""
+    assert normalize_base_path(None) == ""
+    assert normalize_base_path("/library/maps/") == "/library/maps"
+
+
+@pytest.fixture()
+def site_under_maps(backend, monkeypatch, tmp_path):
+    from starlette.testclient import TestClient
+
+    (tmp_path / "index.html").write_text(INDEX)
+    monkeypatch.setattr(backend, "frontend_dir", tmp_path)
+    monkeypatch.setattr(backend.collection_service, "info", lambda: SMITHSONIAN)
+    monkeypatch.setattr(backend.settings, "base_path", "/maps")
+    monkeypatch.setattr(backend.app, "root_path", "/maps")
+    return TestClient(backend.app)
+
+
+def test_site_answers_whether_or_not_the_proxy_strips_the_base_path(site_under_maps):
+    for prefix in ("", "/maps"):
+        assert site_under_maps.get(f"{prefix}/api/health").status_code == 200
+        home = site_under_maps.get(f"{prefix}/")
+        assert "<title>National Museum of American History</title>" in home.text
+        assert (
+            "Disallow: /maps/api/search/"
+            in site_under_maps.get(f"{prefix}/robots.txt").text
+        )
+        assert (
+            "(/maps/api/collection)" in site_under_maps.get(f"{prefix}/llms.txt").text
+        )
+
+
+def test_site_root_without_its_slash_is_sent_to_the_folder(site_under_maps):
+    response = site_under_maps.get("/maps", follow_redirects=False)
+    assert response.status_code == 307
+    assert response.headers["location"] == "/maps/"
+
+
+def test_api_docs_know_where_the_site_lives(site_under_maps):
+    docs = site_under_maps.get("/maps/docs")
+    assert docs.status_code == 200
+    assert "/maps/openapi.json" in docs.text

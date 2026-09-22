@@ -1,4 +1,5 @@
-const API_URL = import.meta.env.API_BASE_URL;
+const sitePath = () => window.location.pathname.replace(/\/index\.html$/, '').replace(/\/$/, '');
+const API_URL = import.meta.env.API_BASE_URL || sitePath();
 
 const VISITOR_FACING_STATUSES = [400, 411, 413, 429, 503];
 
@@ -87,6 +88,16 @@ export const getEmbeddingStats = async () => {
     throw error;
   }
 };
+
+/**
+ * Where an image is served from
+ * @param {string} id - The item ID
+ * @param {'thumbnail'|'full'} size
+ * @returns {string}
+ */
+export const imageUrl = (id, size = 'full') => (
+  `${API_URL}/images/${encodeURIComponent(id)}?size=${size}`
+);
 
 const getJson = async (path) => {
   const response = await fetch(`${API_URL}${path}`);

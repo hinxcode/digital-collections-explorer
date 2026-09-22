@@ -8,7 +8,12 @@ from pathlib import Path
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import (
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+)
 from fastapi.staticfiles import StaticFiles
 
 from .api.routes import browse, embeddings, images, search
@@ -60,6 +65,7 @@ app = FastAPI(
     description=settings.api_description,
     version=settings.api_version,
     lifespan=lifespan,
+    root_path=settings.base_path,
 )
 
 cors_origins = [
@@ -76,6 +82,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def send_the_site_root_to_its_folder(request: Request, call_next):
+    """Under a base path, /maps must become /maps/ or the page's assets would not load"""
+    if settings.base_path and request.url.path == settings.base_path:
+        return RedirectResponse(settings.base_path + "/", status_code=307)
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -130,13 +144,15 @@ def collection_description():
 @app.get("/robots.txt", include_in_schema=False)
 async def robots():
     """Welcome search engines and AI crawlers, and keep them off the search endpoints"""
-    return PlainTextResponse(site_pages.ROBOTS_TXT)
+    return PlainTextResponse(site_pages.robots_txt(settings.base_path))
 
 
 @app.get("/llms.txt", include_in_schema=False)
 async def llms():
     """Describe the site and its API to AI assistants"""
-    return PlainTextResponse(site_pages.llms_txt(collection_description()))
+    return PlainTextResponse(
+        site_pages.llms_txt(collection_description(), settings.base_path)
+    )
 
 
 frontend_dir = Path(f"src/frontend/{settings.collection_type}/dist")

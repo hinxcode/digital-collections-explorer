@@ -56,6 +56,14 @@ class Settings(BaseSettings):
 
     data_dir: str | None = None
 
+    base_path: str = ""
+
+
+def normalize_base_path(value: str | None) -> str:
+    """Turn "maps", "/maps/" or "" into "/maps" or "", the form routing expects"""
+    path = "/" + (value or "").strip().strip("/")
+    return "" if path == "/" else path
+
 
 def load_config(config_path: Path | None = None):
     """Load configuration from JSON file"""
@@ -129,3 +137,5 @@ if os.environ.get("DCE_DATA_DIR"):
 
 if os.environ.get("DCE_PORT"):
     settings.port = int(os.environ["DCE_PORT"])
+
+settings.base_path = normalize_base_path(os.environ.get("DCE_BASE_PATH"))
