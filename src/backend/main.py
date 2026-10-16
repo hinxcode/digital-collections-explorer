@@ -8,11 +8,18 @@ from pathlib import Path
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import (
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+)
 from fastapi.staticfiles import StaticFiles
 
 from .api.routes import browse, embeddings, images, search
 from .core.config import settings
+from .services import site_pages
+from .services.collection_service import DEFAULT_COLLECTION, collection_service
 from .services.embedding_service import embedding_service
 from .services.index_info import describe_mismatch
 from .services.limits import refuse_oversized_upload
@@ -58,6 +65,7 @@ app = FastAPI(
     description=settings.api_description,
     version=settings.api_version,
     lifespan=lifespan,
+    root_path=settings.base_path,
 )
 
 cors_origins = [
@@ -74,6 +82,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def send_the_site_root_to_its_folder(request: Request, call_next):
+    """Under a base path, /maps must become /maps/ or the page's assets would not load"""
+    if settings.base_path and request.url.path == settings.base_path:
+        return RedirectResponse(settings.base_path + "/", status_code=307)
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -116,7 +132,41 @@ def port_in_use(port: int) -> bool:
         return probe.connect_ex(("127.0.0.1", port)) == 0
 
 
+def collection_description():
+    """What collection.json says about the collection, or the defaults if that fails"""
+    try:
+        return collection_service.info()
+    except Exception as e:  # the pages below must never fail because the index did
+        logger.warning(f"Describing the collection with defaults: {e}")
+        return dict(DEFAULT_COLLECTION)
+
+
+@app.get("/robots.txt", include_in_schema=False)
+async def robots():
+    """Welcome search engines and AI crawlers, and keep them off the search endpoints"""
+    return PlainTextResponse(site_pages.robots_txt(settings.base_path))
+
+
+@app.get("/llms.txt", include_in_schema=False)
+async def llms():
+    """Describe the site and its API to AI assistants"""
+    return PlainTextResponse(
+        site_pages.llms_txt(collection_description(), settings.base_path)
+    )
+
+
 frontend_dir = Path(f"src/frontend/{settings.collection_type}/dist")
+
+
+@app.get("/", include_in_schema=False)
+@app.get("/index.html", include_in_schema=False)
+async def home():
+    """The home page, with its title and description filled in from collection.json"""
+    if not frontend_dir.exists():
+        raise HTTPException(status_code=404, detail="The frontend has not been built")
+    index_html = site_pages.read_index(frontend_dir)
+    return HTMLResponse(site_pages.home_page(index_html, collection_description()))
+
 
 if frontend_dir.exists():
     app.mount("/", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")

@@ -5,6 +5,7 @@ services:
     command: ["serve"]
     environment:
       DCE_COLLECTION: ${COLLECTION:-demo}
+      DCE_BASE_PATH: ${BASE_PATH:-}
     ports:
       - "${PORT:-8000}:8000"
     volumes:

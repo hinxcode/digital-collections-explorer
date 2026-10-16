@@ -1,5 +1,6 @@
 import React from 'react';
 import { itemHref } from '../hooks/useHashRoute';
+import { imageUrl } from '../services/api';
 import { titleOf } from '../services/items';
 import './ImageGrid.css';
 
@@ -31,9 +32,9 @@ const ImageGrid = React.memo(({ items, size = 'regular' }) => (
 
       return (
         <li key={item.id} className="image-grid-cell" style={{ '--ratio': aspectRatioOf(item) }}>
-          <a href={itemHref(item.id)} aria-label={title || 'Uncatalogued image'}>
-            <img src={`/images/${item.id}?size=thumbnail`} alt={title || ''} loading="lazy" />
-            <span className="image-grid-caption">{title || 'Uncatalogued image'}</span>
+          <a href={itemHref(item.id)} aria-label={title || 'Uncataloged image'}>
+            <img src={imageUrl(item.id, 'thumbnail')} alt={title || ''} loading="lazy" />
+            <span className="image-grid-caption">{title || 'Uncataloged image'}</span>
             {photoCount > 1 && (
               <span className="image-grid-badge">
                 <PhotosIcon />

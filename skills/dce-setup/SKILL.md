@@ -24,7 +24,7 @@ machine cannot find out.
    speed, and available metadata are all measured by the commands below. Never
    ask the person for something a command can tell you.
 2. **Ask only what a person must decide.** These are policy and intent: may the
-   data leave their machines, who is the site for, should uncatalogued images be
+   data leave their machines, who is the site for, should uncataloged images be
    included. Each question needs a recommended answer and a one-sentence reason.
 3. **Say what is not possible, and why.** If the collection has no dates, say
    there will be no date filter and explain what it would take to get one. Do
@@ -101,7 +101,7 @@ than files. Ask where the actual files are stored, then rerun with
 
 ## Step 3. Tell the person what you found
 
-Summarise the report in a few short paragraphs, in this order:
+Summarize the report in a few short paragraphs, in this order:
 
 1. What is there: how many images, how large, and anything surprising such as
    images with no catalog record, non-image files, or damaged files. If the
@@ -120,7 +120,7 @@ Summarise the report in a few short paragraphs, in this order:
 Be careful with dates and places read from the image files. EXIF records when
 and where a picture was taken. For a born-digital photo archive that is the real
 date. For scanned documents or photographed museum objects it is the
-digitisation date and the studio, which is rarely what a curator means by
+digitization date and the studio, which is rarely what a curator means by
 "date". Say which case applies, and ask if you cannot tell.
 
 Lead with whatever would surprise them most. A curator learning that most of
@@ -199,7 +199,7 @@ curl -s "http://localhost:8000/api/search/text?query=a%20portrait&limit=3"
 Until a `collection.json` sits in `data/collections/NAME/`, the site shows a generic
 title and no suggested searches. Write one with the person, starting from
 `collection.example.json`: the title, one or two sentences of introduction, the name
-of the institution, the licence, and six to eight example searches. Only suggest
+of the institution, the license, and six to eight example searches. Only suggest
 searches you have run and that return good results. The site reads the file on every
 visit, so no restart is needed. On a deployed site, deliver it with
 `deploy/bootstrap.sh describe` or `deploy/aws/describe.sh NAME --file collection.json`.

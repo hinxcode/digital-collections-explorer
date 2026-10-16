@@ -1,27 +1,40 @@
 # Digital Collections Explorer
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15744570.svg)](https://doi.org/10.5281/zenodo.15744570)
+[![Paper](https://img.shields.io/badge/paper-Computational%20Humanities%20Research-blue.svg)](https://doi.org/10.1017/chr.2025.10017)
 [![arXiv](https://img.shields.io/badge/arXiv-2507.00961-b31b1b.svg)](https://arxiv.org/abs/2507.00961)
 
-A web-based exploratory search system leveraging CLIP (Contrastive Language-Image Pre-training) models for enhanced discovery of digital collections, including maps, photographs, and born-digital documents.
+**Digital Collections Explorer is an open-source search site for image collections that have little or no metadata.** A library, archive or museum points it at a folder, an S3 bucket or a manifest of images. Visitors can then search the collection in plain language ("a steam locomotive", "a handwritten letter with a red seal"), search with a picture, wander through it, and follow every image back to the institution's own record. No catalog, tags or OCR are needed: search compares the meaning of the words with the content of the images, using a multimodal embedding model (SigLIP by default, CLIP optionally).
 
-## Overview
+It indexes hundreds of thousands of images on ordinary hardware, serves them from one small machine without a GPU, and can be installed locally or deployed to a server or AWS with one command. A public demo runs at [digital-collections-explorer.com](https://digital-collections-explorer.com/).
 
-This project describes out Digital Collections Explorer, available at: [https://arxiv.org/abs/2507.00961](https://arxiv.org/abs/2507.00961).
+The software is built by the [Lab for Computing Cultural Heritage](https://l4cch.github.io/lab-website/) at the University of Washington Information School and is described in [our paper in *Computational Humanities Research*](https://doi.org/10.1017/chr.2025.10017). To cite it, see [Citation](#citation).
 
 ![A diagram showing an overview of our Digital Collections Explorer, including its various components.](https://github.com/hinxcode/digital-collections-explorer/blob/main/overview.png)
 
-We present Digital Collections Explorer, a web-based, open-source exploratory search platform that leverages CLIP (Contrastive Language-Image Pre-training) for enhanced visual discovery of digital collections. Our Digital Collections Explorer can be installed locally and configured to run on a visual collection of interest on disk in just a few steps. Building upon recent advances in multimodal search techniques, our interface enables natural language queries and reverse image searches over digital collections with visual features. An overview of our system can be seen in the image above.
+## Three Ways to Start
 
-## Features
+| You have | Do this |
+| --- | --- |
+| An AI coding agent (Claude Code, Codex, Gemini CLI, Cursor) | Ask it to make your collection searchable. The `dce-setup` skill in `skills/` walks it through profiling, indexing and serving. See [Large, Remote, or Unsorted Collections](#large-remote-or-unsorted-collections). |
+| Docker | Two commands: one to build the index, one to serve it. See [Running with Docker](#running-with-docker). |
+| A Linux server or an AWS account | One command that installs everything, indexes, serves and survives reboots. AWS deployments show their cost before creating anything. See [Deploying to a Server or to AWS](#deploying-to-a-server-or-to-aws). |
+| A laptop and Python | The [Quick Start Guide](#quick-start-guide) below. |
 
-- Multimodal search capabilities using both text and image inputs
-- Support for various digital collection types:
-  - Historical maps
-  - Photographs
-  - Born-digital documents
-- Fine-tuned CLIP and SigLIP models for improved accuracy (coming soon)
-- User-friendly web interface for exploration
+## What It Does
+
+- **Searches by meaning.** Natural-language queries and reverse image search over photographs, maps and born-digital documents (PDFs), in one interface.
+- **Needs no metadata.** Uncataloged collections work as they are. When a catalog exists, its columns group images into objects and link each image back to the original record.
+- **Comes with three interfaces.** `photographs` opens on a wall of images to wander through and gives every image its own page. `maps` adds a lightbox and image upload. `documents` previews and searches PDFs page by page.
+- **Scales on ordinary hardware.** Indexing is resumable and reads from disk, S3 or a parquet manifest without copying the originals. Serving needs no GPU.
+- **Is safe to put on the internet.** Rate limits, upload limits and concurrency limits protect a small machine. Every refusal is explained to the visitor in plain words.
+- **Describes itself to visitors and to machines.** A `collection.json` sets the title, introduction and suggested searches. The site fills its page title, description and social-sharing tags from it and serves `robots.txt` and `llms.txt`, so search engines and AI assistants can find and describe your collection.
+
+## How It Differs
+
+- **From a catalog search:** a catalog finds what someone has already described. Digital Collections Explorer finds what is in the image, so it works on the boxes nobody has had time to catalog.
+- **From an image viewer (IIIF, Mirador):** viewers display images that were found some other way. This is the finding part, and it links out to your existing viewer or record.
+- **From a hosted AI search service:** this runs on your own machine or cloud account. Your images never leave it, there is no per-query fee, and the code is open.
 
 ## Quick Start Guide
 
@@ -88,7 +101,7 @@ The API server will start at http://localhost:8000
 ## Large, Remote, or Unsorted Collections
 
 The steps above expect your images in `data/raw`. When a collection is too large for
-your disk, lives in an S3 bucket, or has never been organised, use the tools below
+your disk, lives in an S3 bucket, or has never been organized, use the tools below
 instead. They need no metadata and never store the original images.
 
 ```bash
@@ -150,7 +163,7 @@ shows each object once however many photos it has, and gives every image its own
 with similar images and a link back to the institution's own record.
 
 Put a `collection.json` next to the index (in the folder you pass to `--data-dir`) to
-set the title, the introduction, the suggested searches, the licence and the footer
+set the title, the introduction, the suggested searches, the license and the footer
 links. `collection.example.json` shows every field. All of them are optional. The site
 reads the file on every visit, so a change shows up without a restart. For a deployed
 site, see `--collection-file` and `describe` below.
@@ -159,7 +172,7 @@ The link back to the original record is taken from the catalog: a column named
 `source_url`, `guid`, `record_url`, `landing_page` or `permalink` that holds a web
 address. Images are grouped into objects by a column named `object_id`, `record_id`,
 `item_id` or `group_id`. Collections without a catalog still work: every image is
-then its own object and is shown as uncatalogued.
+then its own object and is shown as uncataloged.
 
 ## Limits That Protect a Public Site
 
@@ -206,6 +219,13 @@ site keeps running:
 ```bash
 sudo deploy/bootstrap.sh describe --name my-collection --collection-file collection.json
 ```
+
+### Under a path on an existing website
+
+A site can also live at a path such as `https://library.example.org/maps/`. Set
+`DCE_BASE_PATH`, or `--base-path` with the bootstrap script, or `BASE_PATH` with Docker
+Compose. The proxy configuration and the `robots.txt` to add at the root of the domain are
+covered in the [documentation](https://digital-collections-explorer.com/docs/deploy/under-a-path/).
 
 ### AWS
 
@@ -360,6 +380,22 @@ npm run frontend-build
 ```
 
 Then restart the backend server to serve the updated frontend.
+
+## Citation
+
+If you use Digital Collections Explorer in research, please cite the paper and the software release you used. Every release has its own DOI on [Zenodo](https://doi.org/10.5281/zenodo.15744570). The paper is open access in [*Computational Humanities Research*](https://doi.org/10.1017/chr.2025.10017), and the preprint is on [arXiv](https://arxiv.org/abs/2507.00961).
+
+```bibtex
+@article{huang2025digitalcollectionsexplorer,
+  title   = {Digital Collections Explorer: An Open-Source, Multimodal Viewer for Searching Digital Collections},
+  author  = {Huang, Ying-Hsiang and Lee, Benjamin Charles Germain},
+  journal = {Computational Humanities Research},
+  volume  = {1},
+  pages   = {e14},
+  year    = {2025},
+  doi     = {10.1017/chr.2025.10017}
+}
+```
 
 ## Contributing
 
