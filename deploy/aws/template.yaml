@@ -1,14 +1,14 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
   Digital Collections Explorer on one EC2 instance. The instance indexes the
-  collection once, then serves the search site. Deleting the stack removes
-  everything it created, including the index.
+  collection once, or copies one prepared elsewhere, then serves the search site.
+  Deleting the stack removes everything it created, including the index.
 
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label: {default: Your collection}
-        Parameters: [CollectionName, Source, FetchVia, AnonymousS3, SourceBucket, Limit]
+        Parameters: [CollectionName, Source, PreparedFrom, FetchVia, AnonymousS3, SourceBucket, Limit]
       - Label: {default: Machine}
         Parameters: [InstanceType, DiskSizeGiB, AllowedCidr, PublicHttps]
       - Label: {default: Spending alert}
@@ -24,7 +24,14 @@ Parameters:
     Description: Short name for the collection, for example nmah-photographs.
   Source:
     Type: String
+    Default: ""
     Description: Where the images are. An s3://bucket/prefix or the URL of a .parquet manifest.
+  PreparedFrom:
+    Type: String
+    Default: ""
+    Description: >-
+      Instead of Source, an s3://bucket/prefix holding a collection prepared elsewhere.
+      The machine copies it and indexes nothing. Set SourceBucket to that bucket.
   FetchVia:
     Type: String
     Default: ""
@@ -92,7 +99,16 @@ Parameters:
       Only with PublicHttps. The id of the prefix list
       com.amazonaws.global.cloudfront.origin-facing in this region. deploy.sh fills this in.
 
+Rules:
+  OneSource:
+    Assertions:
+      - Assert: !Or [!Not [!Equals [!Ref Source, ""]], !Not [!Equals [!Ref PreparedFrom, ""]]]
+        AssertDescription: Set Source, or PreparedFrom for a collection prepared elsewhere.
+      - Assert: !Or [!Equals [!Ref Source, ""], !Equals [!Ref PreparedFrom, ""]]
+        AssertDescription: Set Source or PreparedFrom, not both.
+
 Conditions:
+  HasPreparedFrom: !Not [!Equals [!Ref PreparedFrom, ""]]
   HasFetchVia: !Not [!Equals [!Ref FetchVia, ""]]
   IsAnonymous: !Equals [!Ref AnonymousS3, "true"]
   HasLimit: !Not [!Equals [!Ref Limit, 0]]
@@ -179,10 +195,15 @@ Resources:
             - "set -euxo pipefail\n"
             - !Sub "curl -fsSL '${BootstrapUrl}' -o /usr/local/bin/dce-bootstrap\n"
             - "chmod +x /usr/local/bin/dce-bootstrap\n"
-            - !Sub "/usr/local/bin/dce-bootstrap install --name '${CollectionName}' --source '${Source}' --port 80 --image '${Image}'"
-            - !If [HasFetchVia, !Sub " --fetch-via '${FetchVia}'", ""]
-            - !If [IsAnonymous, " --anonymous", ""]
-            - !If [HasLimit, !Sub " --limit ${Limit}", ""]
+            - !If
+              - HasPreparedFrom
+              - !Sub "/usr/local/bin/dce-bootstrap install --name '${CollectionName}' --from '${PreparedFrom}' --port 80 --image '${Image}'"
+              - !Join
+                - ""
+                - - !Sub "/usr/local/bin/dce-bootstrap install --name '${CollectionName}' --source '${Source}' --port 80 --image '${Image}'"
+                  - !If [HasFetchVia, !Sub " --fetch-via '${FetchVia}'", ""]
+                  - !If [IsAnonymous, " --anonymous", ""]
+                  - !If [HasLimit, !Sub " --limit ${Limit}", ""]
             - "\n"
       Tags:
         - {Key: Name, Value: !Sub "dce-${CollectionName}"}
@@ -271,7 +292,7 @@ Resources:
 
 Outputs:
   SiteUrl:
-    Description: Opens once indexing has finished.
+    Description: Opens once indexing, or the copy of a prepared collection, has finished.
     Value: !If
       - UsesHttps
       - !Sub "https://${Distribution.DomainName}"

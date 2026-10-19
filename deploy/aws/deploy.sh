@@ -9,6 +9,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-us-west-2}}"
 SOURCE=""
+FROM=""
 FETCH_VIA=""
 ANONYMOUS=""
 SOURCE_BUCKET=""
@@ -27,15 +28,19 @@ ASSUME_YES="false"
 
 usage() {
     cat <<'EOF'
-Usage: deploy.sh NAME --source SRC [options]
+Usage: deploy.sh NAME (--source SRC | --from S3URI) [options]
 
 Run it again with the same NAME and only the options you want to change.
 Everything you leave out keeps the value the deployment already has.
 
-  --source SRC          s3://bucket/prefix or the URL of a .parquet manifest (required the first time)
+  --source SRC          s3://bucket/prefix or the URL of a .parquet manifest to index
+  --from S3URI          or s3://bucket/prefix holding a collection prepared elsewhere, which
+                        the machine copies instead of indexing. One of the two is required
+                        the first time.
   --fetch-via S3URI     bucket holding the files, when manifest URLs are not downloadable
   --anonymous           read S3 without credentials (public buckets)
   --source-bucket NAME  private bucket in this account that the machine may read
+                        (with --from, the bucket it names)
   --limit N             only index the first N images
   --collection-file F   the collection.json that describes the collection to visitors
   --instance-type TYPE  default t3.medium
@@ -61,6 +66,7 @@ shift
 while [ $# -gt 0 ]; do
     case "$1" in
     --source) SOURCE="$2"; shift 2 ;;
+    --from) FROM="$2"; shift 2 ;;
     --fetch-via) FETCH_VIA="$2"; shift 2 ;;
     --anonymous) ANONYMOUS="true"; shift ;;
     --source-bucket) SOURCE_BUCKET="$2"; shift 2 ;;
@@ -136,11 +142,13 @@ if [ -n "$EXISTING_INSTANCE" ] && [ "$EXISTING_INSTANCE" != "None" ]; then
     fi
     IMAGE=""
     set_at_first_boot --source "$SOURCE" Source
+    set_at_first_boot --from "$FROM" PreparedFrom
     set_at_first_boot --fetch-via "$FETCH_VIA" FetchVia
     set_at_first_boot --anonymous "$ANONYMOUS" AnonymousS3
     set_at_first_boot --limit "$LIMIT" Limit
     set_at_first_boot --bootstrap-url "$BOOTSTRAP_URL" BootstrapUrl
     SOURCE="$(current_parameter Source)"
+    FROM="$(current_parameter PreparedFrom)"
     FETCH_VIA="$(current_parameter FetchVia)"
     ANONYMOUS="$(current_parameter AnonymousS3)"
     LIMIT="$(current_parameter Limit)"
@@ -159,11 +167,22 @@ else
     IS_UPDATE="false"
     CURRENT_HTTPS="false"
     MACHINE_BOOTSTRAP_URL="$BOOTSTRAP_URL"
-    [ -n "$SOURCE" ] || fail "--source is required"
-    case "$SOURCE" in
-    s3://* | http://* | https://*) ;;
-    *) fail "the cloud machine cannot see files on this computer. --source must be an s3:// or https:// address" ;;
-    esac
+    [ -n "$SOURCE" ] || [ -n "$FROM" ] || fail "--source or --from is required"
+    [ -z "$SOURCE" ] || [ -z "$FROM" ] || fail "use --source or --from, not both"
+    if [ -n "$FROM" ]; then
+        [[ "$FROM" =~ ^s3://([a-z0-9][a-z0-9.-]*)(/[A-Za-z0-9._/-]*)?$ ]] ||
+            fail "--from must be an s3:// address made of letters, digits, '.', '_', '-' and '/'"
+        FROM_BUCKET="${BASH_REMATCH[1]}"
+        [ -z "$FETCH_VIA$ANONYMOUS$LIMIT" ] || fail "--fetch-via, --anonymous and --limit only apply to --source"
+        [ -n "$SOURCE_BUCKET" ] || SOURCE_BUCKET="$FROM_BUCKET"
+        [ "$SOURCE_BUCKET" = "$FROM_BUCKET" ] ||
+            fail "the machine may only read the bucket $SOURCE_BUCKET, so it could not copy $FROM"
+    else
+        case "$SOURCE" in
+        s3://* | http://* | https://*) ;;
+        *) fail "the cloud machine cannot see files on this computer. --source must be an s3:// or https:// address" ;;
+        esac
+    fi
     [ -n "$ANONYMOUS" ] || ANONYMOUS="false"
     [ -n "$LIMIT" ] || LIMIT="0"
     [ -n "$INSTANCE_TYPE" ] || INSTANCE_TYPE="t3.medium"
@@ -219,7 +238,11 @@ else
     echo "This will create the following in AWS account ending in ${ACCOUNT: -4}, region $REGION:"
 fi
 echo
-echo "  1 virtual machine ($INSTANCE_TYPE) that indexes '$SOURCE' and then serves the site"
+if [ -n "$FROM" ]; then
+    echo "  1 virtual machine ($INSTANCE_TYPE) that copies the collection prepared in '$FROM' and serves it"
+else
+    echo "  1 virtual machine ($INSTANCE_TYPE) that indexes '$SOURCE' and then serves the site"
+fi
 echo "  1 disk of $DISK_GIB GB, deleted together with the machine"
 echo "  1 fixed public address"
 if [ "$HTTPS" = "true" ]; then
@@ -228,7 +251,11 @@ if [ "$HTTPS" = "true" ]; then
 else
     echo "  1 firewall rule allowing web traffic (port 80) from $ALLOWED_CIDR"
 fi
-echo "  1 permission role so administrators can connect without SSH"
+if [ -n "$SOURCE_BUCKET" ]; then
+    echo "  1 permission role so administrators can connect without SSH and the machine can read $SOURCE_BUCKET"
+else
+    echo "  1 permission role so administrators can connect without SSH"
+fi
 [ "$BUDGET" != "0" ] && echo "  1 spending alert at \$$BUDGET per month, sent to $EMAIL"
 [ -n "$COLLECTION_FILE" ] && echo "  The site will describe itself with $COLLECTION_FILE"
 echo
@@ -252,7 +279,7 @@ if [ "$ASSUME_YES" != "true" ]; then
 fi
 
 overrides=(
-    "CollectionName=$NAME" "Source=$SOURCE" "FetchVia=$FETCH_VIA"
+    "CollectionName=$NAME" "Source=$SOURCE" "PreparedFrom=$FROM" "FetchVia=$FETCH_VIA"
     "AnonymousS3=$ANONYMOUS" "SourceBucket=$SOURCE_BUCKET" "Limit=$LIMIT"
     "InstanceType=$INSTANCE_TYPE" "DiskSizeGiB=$DISK_GIB" "AllowedCidr=$ALLOWED_CIDR"
     "MonthlyBudgetUsd=$BUDGET" "BudgetEmail=$EMAIL" "MachineImageId=$MACHINE_IMAGE"
@@ -276,6 +303,8 @@ aws cloudformation describe-stacks --region "$REGION" --stack-name "$STACK" \
 echo
 if [ "$IS_UPDATE" = "true" ]; then
     echo "The deployment was updated. The index and the address were kept."
+elif [ -n "$FROM" ]; then
+    echo "The machine is now installing and copying $FROM. The site opens when the copy finishes."
 else
     echo "The machine is now installing and indexing. The site opens when indexing finishes."
 fi

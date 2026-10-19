@@ -40,11 +40,11 @@ def hours_since(moment, now=None):
 
 def cost_lines(report, current_type, indexed_on, price_of, now=None):
     """Describe what indexing cost and what the running machine costs"""
-    run = report["run"]
+    run = report.get("run") or {}
     lines = []
     indexing_type = indexed_on or run.get("machine_type")
     indexing_price = price_of(indexing_type)
-    hours = run["active_seconds"] / 3600
+    hours = run.get("active_seconds", 0) / 3600
 
     if indexing_price is not None and hours:
         cost = hours * indexing_price

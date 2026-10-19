@@ -78,7 +78,11 @@ case "$*" in
     echo "i-0existing" ;;
 *"describe-stacks"*"Parameters[]"*)
     printf 'CollectionName\tdemo\n'
-    printf 'Source\ts3://bucket/images\n'
+    if [ -n "$FAKE_PREPARED_FROM" ]; then
+        printf 'Source\t\nPreparedFrom\t%s\n' "$FAKE_PREPARED_FROM"
+    else
+        printf 'Source\ts3://bucket/images\n'
+    fi
     printf 'FetchVia\t\n'
     printf 'AnonymousS3\ttrue\n'
     printf 'SourceBucket\tprivate-bucket\n'
@@ -149,6 +153,8 @@ def fake_deploy(tmp_path):
         machine="current",
         not_ready_for=0,
         served_over_https=False,
+        source=("--source", "s3://bucket/images"),
+        prepared_from="",
     ):
         import os
 
@@ -164,6 +170,7 @@ def fake_deploy(tmp_path):
             "FAKE_MACHINE": machine,
             "FAKE_NOT_READY_FOR": str(not_ready_for),
             "FAKE_HTTPS": "true" if served_over_https else "false",
+            "FAKE_PREPARED_FROM": prepared_from,
         }
         if script != "deploy.sh":
             command = ["bash", str(scripts / script), "demo", *extra]
@@ -171,7 +178,7 @@ def fake_deploy(tmp_path):
             return result, log.read_text().splitlines()
         command = ["bash", str(scripts / "deploy.sh"), "demo", "--yes"]
         if not stack_exists:
-            command += ["--source", "s3://bucket/images", "--disk-gib", "40"]
+            command += [*source, "--disk-gib", "40"]
         command += extra
         result = subprocess.run(command, capture_output=True, text=True, env=env)
         deploys = [
@@ -260,6 +267,13 @@ def test_an_unrecorded_indexing_machine_can_be_named_by_hand(run_cost):
     assert any("--indexed-on" in line for line in unknown)
     named = run_cost.cost_lines(report, "t3.medium", "c7i.2xlarge", PRICES.get)
     assert any("Indexing cost about $0.36" in line for line in named)
+
+
+def test_a_collection_prepared_elsewhere_costs_only_the_running_machine(run_cost):
+    report = {"prepared_from": "s3://my-bucket/dce/20261012T063839Z.3"}
+    lines = run_cost.cost_lines(report, "t3.medium", None, PRICES.get)
+    assert [line for line in lines if line.startswith("Running now: t3.medium")]
+    assert not [line for line in lines if "Indexing" in line]
 
 
 def test_status_prices_the_run_when_the_machine_can_report_it(fake_deploy):
@@ -554,6 +568,7 @@ def test_repeating_the_image_the_machine_was_created_with_is_fine(fake_deploy):
     "flags",
     [
         ("--source", "s3://bucket/other"),
+        ("--from", "s3://my-bucket/other"),
         ("--fetch-via", "s3://elsewhere"),
         ("--limit", "500"),
         ("--bootstrap-url", "https://example.org/other.sh"),
@@ -574,6 +589,50 @@ def test_a_restricted_site_cannot_be_kept_restricted_under_https(fake_deploy):
     )
     assert result.returncode != 0
     assert deploys == []
+
+
+PREPARED = "s3://my-bucket/dce/20261012T063839Z.3"
+
+
+def test_a_new_deployment_can_start_from_a_collection_prepared_elsewhere(fake_deploy):
+    result, deploys = fake_deploy(False, source=("--from", PREPARED))
+    assert result.returncode == 0, result.stderr
+    assert f"PreparedFrom={PREPARED}" in deploys[0]
+    assert " Source= " in deploys[0]
+    assert "SourceBucket=my-bucket" in deploys[0], "the machine must be let in"
+    assert f"copies the collection prepared in '{PREPARED}'" in result.stdout
+    assert "the machine can read my-bucket" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "source, reason",
+    [
+        (("--source", "s3://bucket/images", "--from", PREPARED), "not both"),
+        (("--from", PREPARED, "--source-bucket", "other-bucket"), "other-bucket"),
+        (("--from", PREPARED, "--limit", "500"), "only apply to --source"),
+        (("--from", "/home/me/prepared"), "s3://"),
+        (("--from", "s3://my-bucket/dce/$(reboot)"), "s3://"),
+    ],
+)
+def test_a_new_deployment_refuses_a_prepared_collection_it_could_not_copy(
+    fake_deploy, source, reason
+):
+    result, deploys = fake_deploy(False, source=source)
+    assert result.returncode != 0
+    assert deploys == []
+    assert reason in result.stderr
+
+
+def test_an_update_keeps_the_prepared_collection_the_machine_started_from(
+    fake_deploy,
+):
+    result, deploys = fake_deploy(
+        True, "--instance-type", "t3.medium", prepared_from=PREPARED
+    )
+    assert result.returncode == 0, result.stderr
+    assert f"PreparedFrom={PREPARED}" in deploys[0]
+    assert " Source= " in deploys[0]
+    assert f"copies the collection prepared in '{PREPARED}'" in result.stdout
 
 
 def test_import_sends_the_prepared_collection_to_the_machine(fake_deploy, tmp_path):
@@ -625,16 +684,18 @@ def import_site(tmp_path):
     (prepared / "embeddings").mkdir(parents=True)
     (prepared / "embeddings" / "index_info.json").write_text('{"format": 2}')
     (prepared / "embeddings" / "metadata.sqlite").write_text("")
-    (prepared / "collection.json").write_text('{"title": "Nine Museums"}')
+    (prepared / "collection.json").write_text('{"title": "Prepared Elsewhere"}')
     fake_bin = tmp_path / "docker-bin"
     fake_bin.mkdir()
     log = tmp_path / "docker.log"
     (fake_bin / "docker").write_text(LOGGING_DOCKER.format(log=log))
     (fake_bin / "docker").chmod(0o755)
+    (fake_bin / "systemctl").write_text(LOGGING_DOCKER.format(log=log))
+    (fake_bin / "systemctl").chmod(0o755)
     env = {**os.environ, "PATH": f"{fake_bin}:{os.environ['PATH']}"}
 
-    def run(*flags, name="demo"):
-        command = ["bash", str(ROOT / "deploy/bootstrap.sh"), "import"]
+    def run(*flags, name="demo", action="import"):
+        command = ["bash", str(ROOT / "deploy/bootstrap.sh"), action]
         command += ["--name", name, "--data-root", str(data_root), *flags]
         return subprocess.run(command, capture_output=True, text=True, env=env)
 
@@ -648,10 +709,12 @@ def test_bootstrap_import_swaps_in_the_prepared_collection_and_keeps_the_old_one
     result = run("--from", str(prepared), "--image", "example/image:2")
     assert result.returncode == 0, result.stderr
     assert (
-        json.loads((current / "collection.json").read_text())["title"] == "Nine Museums"
+        json.loads((current / "collection.json").read_text())["title"]
+        == "Prepared Elsewhere"
     )
     assert (current / "embeddings" / "index_info.json").exists()
     assert (current / "ingest_complete").exists(), "the machine must not index again"
+    assert (current / "prepared_from").read_text().strip() == str(prepared)
     assert json.loads((current / "settings.json").read_text()) == {"max_upload_mb": 20}
     kept = [p for p in current.parent.iterdir() if p.name.startswith(".demo.previous-")]
     assert len(kept) == 1 and (kept[0] / "embeddings" / "embeddings.pt").exists()
@@ -677,3 +740,31 @@ def test_bootstrap_import_needs_a_site_to_import_into(import_site):
     result = run("--from", str(prepared), name="other")
     assert result.returncode != 0
     assert "no collection named other" in result.stderr
+
+
+def test_bootstrap_status_names_where_a_prepared_collection_came_from(import_site):
+    run, _, prepared, _, log = import_site
+    assert run("--from", str(prepared)).returncode == 0
+    status = run(action="status")
+    assert status.returncode == 0, status.stderr
+    assert f"copied from {prepared}" in status.stdout
+    assert "ingest" not in log.read_text(), "nothing was indexed to report on"
+    report = run("--json", action="status")
+    assert json.loads(report.stdout) == {"prepared_from": str(prepared)}
+
+
+def test_bootstrap_install_never_copies_a_prepared_collection_over_a_site(import_site):
+    run, current, prepared, _, _ = import_site
+    result = run("--from", str(prepared), action="install")
+    assert result.returncode != 0
+    assert "use import" in result.stderr
+    assert (current / "embeddings" / "embeddings.pt").read_text() == "old index"
+
+
+def test_bootstrap_install_takes_images_or_a_prepared_collection_not_both(import_site):
+    run, _, prepared, _, _ = import_site
+    result = run(
+        "--source", "/images", "--from", str(prepared), action="install", name="new"
+    )
+    assert result.returncode != 0
+    assert "not both" in result.stderr

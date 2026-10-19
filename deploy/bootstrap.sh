@@ -32,7 +32,9 @@ usage() {
 Usage: bootstrap.sh <install|status|describe|configure|update|import|uninstall> --name NAME [options]
 
 install options:
-  --source SRC        a folder, s3://bucket/prefix, or a .parquet manifest (required)
+  --source SRC        a folder, s3://bucket/prefix, or a .parquet manifest to index
+  --from SRC          or a collection prepared elsewhere, which needs no indexing:
+                      a folder, or s3://bucket/prefix holding one
   --fetch-via S3URI   where the files live when manifest URLs are not downloadable
   --anonymous         read S3 without credentials (public buckets)
   --limit N           only index the first N images
@@ -133,6 +135,8 @@ fetch_image() {
 
 resolve_source() {
     SOURCE_MOUNT=""
+    SOURCE_ARG=""
+    [ -n "$SOURCE" ] || return 0
     case "$SOURCE" in
     s3://* | http://* | https://*)
         SOURCE_ARG="$SOURCE"
@@ -223,19 +227,30 @@ place_description() {
 }
 
 do_install() {
-    [ -n "$SOURCE" ] || fail "--source is required"
+    [ -n "$SOURCE" ] || [ -n "$FROM" ] || fail "--source or --from is required"
+    [ -z "$SOURCE" ] || [ -z "$FROM" ] || fail "use --source or --from, not both"
+    [ -z "$FROM" ] || [ ! -e "$COLLECTION_DIR" ] ||
+        fail "$NAME already has a collection in $COLLECTION_DIR. To replace it, use import"
     [ -z "$COLLECTION_FILE" ] || [ -f "$COLLECTION_FILE" ] || fail "file not found: $COLLECTION_FILE"
     [ "$(id -u)" -eq 0 ] || fail "run this with sudo"
     install_docker
     fetch_image
     resolve_source
+    if [ -n "$FROM" ]; then
+        stage_prepared
+        mv "$STAGED" "$COLLECTION_DIR"
+    fi
     mkdir -p "$COLLECTION_DIR"
     [ -z "$COLLECTION_FILE" ] || place_description "$IMAGE"
     chown -R "$CONTAINER_UID:$CONTAINER_UID" "$COLLECTION_DIR"
     write_runner
     start_service
     echo
-    say "Indexing has started. The site opens on port $PORT when it finishes."
+    if [ -n "$FROM" ]; then
+        say "The site opens on port $PORT as soon as it has started."
+    else
+        say "Indexing has started. The site opens on port $PORT when it finishes."
+    fi
     say "Check progress with: $0 status --name $NAME"
 }
 
@@ -243,11 +258,18 @@ do_status() {
     if [ ! -d "$COLLECTION_DIR" ]; then
         fail "no collection named $NAME in $DATA_ROOT"
     fi
+    local prepared="$COLLECTION_DIR/prepared_from"
+    if [ "$AS_JSON" = "true" ] && [ -f "$prepared" ]; then
+        printf '{"prepared_from": "%s"}\n' "$(sed 's/\\/\\\\/g; s/"/\\"/g' "$prepared")"
+        return
+    fi
     if [ "$AS_JSON" = "true" ]; then
         docker run --rm -v "$COLLECTION_DIR:/data" "$(image_in_use)" ingest --status 2>/dev/null
         return
     fi
-    if ! docker run --rm -v "$COLLECTION_DIR:/data" "$(image_in_use)" ingest --report 2>/dev/null; then
+    if [ -f "$prepared" ]; then
+        echo "Indexing: none on this machine. The collection was copied from $(cat "$prepared")"
+    elif ! docker run --rm -v "$COLLECTION_DIR:/data" "$(image_in_use)" ingest --report 2>/dev/null; then
         if [ -f "$COLLECTION_DIR/ingest_complete" ]; then
             echo "Indexing: finished"
         else
@@ -343,31 +365,36 @@ copy_prepared() {
     esac
 }
 
+stage_prepared() {
+    STAGED="$DATA_ROOT/collections/.$NAME.incoming"
+    rm -rf "$STAGED"
+    mkdir -p "$STAGED"
+    copy_prepared "$STAGED" || { rm -rf "$STAGED"; fail "could not copy $FROM"; }
+    if [ ! -f "$STAGED/embeddings/index_info.json" ] ||
+        [ ! -f "$STAGED/embeddings/metadata.sqlite" ]; then
+        rm -rf "$STAGED"
+        fail "$FROM is not a prepared collection: it needs embeddings/index_info.json and embeddings/metadata.sqlite"
+    fi
+    touch "$STAGED/ingest_complete"
+    echo "$FROM" >"$STAGED/prepared_from"
+}
+
 do_import() {
     [ -n "$FROM" ] || fail "--from is required"
     [ -f "$RUNNER" ] || fail "no collection named $NAME in $DATA_ROOT"
     [ -w "$DATA_ROOT/collections" ] || fail "run this with sudo"
-    local incoming="$DATA_ROOT/collections/.$NAME.incoming"
     local previous
     previous="$DATA_ROOT/collections/.$NAME.previous-$(date +%Y%m%d%H%M%S)"
-    rm -rf "$incoming"
-    mkdir -p "$incoming"
-    copy_prepared "$incoming" || { rm -rf "$incoming"; fail "could not copy $FROM"; }
-    if [ ! -f "$incoming/embeddings/index_info.json" ] ||
-        [ ! -f "$incoming/embeddings/metadata.sqlite" ]; then
-        rm -rf "$incoming"
-        fail "$FROM is not a prepared collection: it needs embeddings/index_info.json and embeddings/metadata.sqlite"
-    fi
+    stage_prepared
     if [ -f "$COLLECTION_DIR/settings.json" ]; then
-        cp "$COLLECTION_DIR/settings.json" "$incoming/settings.json"
+        cp "$COLLECTION_DIR/settings.json" "$STAGED/settings.json"
     fi
-    touch "$incoming/ingest_complete"
     if [ "$(id -u)" -eq 0 ]; then
-        chown -R "$CONTAINER_UID:$CONTAINER_UID" "$incoming"
+        chown -R "$CONTAINER_UID:$CONTAINER_UID" "$STAGED"
     fi
     [ "$IMAGE_WAS_GIVEN" = "true" ] && switch_image
     mv "$COLLECTION_DIR" "$previous"
-    mv "$incoming" "$COLLECTION_DIR"
+    mv "$STAGED" "$COLLECTION_DIR"
     restart_site
     say "$NAME now serves the collection from $FROM, with the same limits as before."
     say "The previous data is kept in $previous. Delete it once the site works."
