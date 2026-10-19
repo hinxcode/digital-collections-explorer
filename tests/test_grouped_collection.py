@@ -121,6 +121,48 @@ def test_each_image_is_described_from_its_record(grouped):
     assert loose["object_id"] == "b2" and loose["metadata"]["title"] is None
 
 
+def add_record_details(embeddings_dir):
+    con = sqlite3.connect(embeddings_dir / "metadata.sqlite")
+    con.execute(
+        "CREATE TABLE record_fields (record_id TEXT, position INTEGER, field TEXT, "
+        "label TEXT, value TEXT)"
+    )
+    con.execute("CREATE TABLE record_facets (record_id TEXT, facet TEXT, value TEXT)")
+    con.executemany(
+        "INSERT INTO record_fields VALUES (?, ?, ?, ?, ?)",
+        [
+            ("rec-a", 2, "date", "Date", "1880s"),
+            ("rec-a", 1, "creditLine", "Credit Line", "Gift of a donor"),
+            ("rec-b", 1, "date", "Date", "1850"),
+        ],
+    )
+    con.executemany(
+        "INSERT INTO record_facets VALUES (?, ?, ?)",
+        [
+            ("rec-a", "topic", "Textiles"),
+            ("rec-a", "topic", "Quilts"),
+            ("rec-a", "place", "Ohio"),
+        ],
+    )
+    con.commit()
+    con.close()
+
+
+def test_an_item_carries_its_record_fields_in_catalog_order_and_its_facets(grouped):
+    add_record_details(grouped.embeddings.embeddings_dir)
+    record = grouped.item("a2")["record"]
+    assert record["fields"] == [
+        {"label": "Credit Line", "value": "Gift of a donor"},
+        {"label": "Date", "value": "1880s"},
+    ]
+    assert record["facets"] == {"place": ["Ohio"], "topic": ["Quilts", "Textiles"]}
+    assert grouped.item("b2")["record"] == {"fields": [], "facets": {}}
+
+
+def test_a_collection_prepared_without_record_details_still_serves_items(grouped):
+    assert grouped.item("a1")["record"] == {"fields": [], "facets": {}}
+
+
 def test_searching_some_groups_returns_only_their_images(grouped):
     scores = scores_for(grouped, [1.0, 0.0, 0.0])
     west = grouped.ranked(scores, limit=10, groups=["west"])
@@ -248,3 +290,10 @@ def test_an_original_kept_elsewhere_is_reached_by_redirect(site):
     answer = site.get("/static/a1", follow_redirects=False)
     assert answer.status_code == 307
     assert answer.headers["location"] == ORIGINAL
+
+
+def test_an_item_page_shows_the_record_it_belongs_to(site, grouped):
+    add_record_details(grouped.embeddings.embeddings_dir)
+    answer = site.get("/api/items/b1").json()
+    assert answer["metadata"]["group"] == "west"
+    assert answer["record"]["fields"] == [{"label": "Date", "value": "1850"}]
