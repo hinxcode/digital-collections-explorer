@@ -172,7 +172,7 @@ def test_api_docs_know_where_the_site_lives(site_under_maps):
 
 def test_llms_txt_names_the_groups_of_a_collection_split_into_groups():
     grouped = {
-        "title": "Nine Smithsonian Museums",
+        "title": "Smithsonian Open Access",
         "group_label": "Museum",
         "groups": [
             {"id": "nmah", "label": "National Museum of American History"},
@@ -184,3 +184,12 @@ def test_llms_txt_names_the_groups_of_a_collection_split_into_groups():
     assert "National Portrait Gallery (`npg`)" in text
     assert "`groups` such as `nmah,npg`" in text
     assert "`groups`" not in site_pages.llms_txt({"title": "Maps"})
+
+
+def test_llms_txt_says_when_search_also_matches_the_catalog():
+    text = site_pages.llms_txt({"title": "Museums", "catalog_search": True})
+    assert "also matches the catalog records" in text
+    assert "`mode` (auto, visual, keyword or hybrid)" in text
+    plain = site_pages.llms_txt({"title": "Maps"})
+    assert "No catalog or metadata is needed" in plain
+    assert "`mode`" not in plain

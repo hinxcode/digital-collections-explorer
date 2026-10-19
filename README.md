@@ -214,6 +214,43 @@ When `record_fields` is present, an item page lists its record's fields in their
 `position` order, with repeated labels grouped together, and `/api/items/<id>` returns
 them with the record's facets under `record`.
 
+## Searching by Appearance and by Catalog
+
+When a grouped collection's `metadata.sqlite` also holds `records_fts`, an FTS5 table
+with one row per record (`record_id` and text columns such as `title`, `names`, `dates`,
+`places`, `topics`, `object_types`, `notes`, `physical` and `identifiers`), and
+`entity_vocab(term, field, record_count)`, the collection's names, places, topics and
+object types, text search runs two channels and fuses them:
+
+- **Visual:** the model compares the query with every image, as before.
+- **Keyword:** SQLite full-text search ranked by BM25, with titles, names and catalog
+  numbers weighing most. Every meaningful word must match, small words such as "a" or
+  "of" are not required, and a word also matches its plural or singular when the
+  catalog uses that form.
+- **Fusion:** reciprocal rank fusion, with a weight for each channel and a tunable
+  constant (60 by default). Each object is shown once.
+
+With `mode=auto`, the default, the site reads the query first and weighs the channels:
+
+| Query | Read as | Visual, keyword |
+|---|---|---|
+| `"exact phrase"` | phrase | 0.3, 1 |
+| `name:Muybridge`, also `title:`, `place:`, `topic:`, `type:`, `date:`, `id:` | one field | 0.3, 1 |
+| `NPG.87.109`, in a pattern the collection's own catalog numbers follow | catalog number | 0, 1 |
+| `1885`, `1880s` | date | 0.3, 1 |
+| a name from the catalog, such as `mathew brady` | name | 0.3, 1 |
+| a place, subject or kind of object from the catalog | place, topic, object type | 1, 1 |
+| a catalog term inside a longer query, such as `portrait of abraham lincoln` | that term | 1, 1 |
+| anything else | description | 1, 0.3 |
+
+`mode=visual`, `mode=keyword` and `mode=hybrid` (equal weights) decide for it. A word
+that no record uses is corrected to a close, common word from the catalog; the response
+says so, and `correct_spelling=false` searches the words as typed. Every result carries
+its rank in each channel, the record fields that matched and an explanation such as
+"Title matched · Visual similarity #4". The response's `search` tells how the query was
+read and, when the catalog matched nothing, why: "No records mention both “quilt” and
+“airplane”; showing visually similar items".
+
 ## Limits That Protect a Public Site
 
 Searching is the only expensive thing the site does, so it is the only thing that is

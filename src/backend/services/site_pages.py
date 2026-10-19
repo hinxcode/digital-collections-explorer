@@ -84,15 +84,27 @@ def llms_txt(collection: Dict[str, Any], base_path: str = "") -> str:
         lines += [f"Each image belongs to one {kind}: {listed}.", ""]
         example = ",".join(g["id"] for g in groups[:2])
         group_hint = f", and `groups` such as `{example}` to search only some"
-    lines += [
-        "Visitors search the collection by describing what they are looking for in plain",
-        "language, or by uploading a picture. No catalog or metadata is needed: search",
-        "compares the meaning of the words with the content of the images.",
+    catalog = bool(collection.get("catalog_search"))
+    if catalog:
+        how = [
+            "Visitors search the collection by describing what they are looking for in plain",
+            "language, or by uploading a picture. Search compares the meaning of the words",
+            "with the content of the images, and also matches the catalog records: titles,",
+            "names, places, subjects, dates and catalog numbers.",
+        ]
+    else:
+        how = [
+            "Visitors search the collection by describing what they are looking for in plain",
+            "language, or by uploading a picture. No catalog or metadata is needed: search",
+            "compares the meaning of the words with the content of the images.",
+        ]
+    mode_hint = ", `mode` (auto, visual, keyword or hybrid)" if catalog else ""
+    lines += how + [
         "",
         "## Searching",
         "",
         f"- [Text search]({base_path}/api/search/text?query=a+steam+locomotive): "
-        f"GET with `query`, optional `limit` and `page`{group_hint}; "
+        f"GET with `query`, optional `limit` and `page`{mode_hint}{group_hint}; "
         "returns ranked images",
         f"- [Image search]({base_path}/api/search/image): "
         "POST an image file; returns similar images",
