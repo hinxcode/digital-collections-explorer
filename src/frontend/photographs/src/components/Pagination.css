@@ -5,7 +5,9 @@
   margin: 25px 0;
   gap: 15px;
   padding: 10px 20px;
-  max-width: 300px;
+  box-sizing: border-box;
+  max-width: min(340px, 100%);
+  flex-wrap: wrap;
   margin-left: auto;
   margin-right: auto;
   font-size: 0.875rem;
