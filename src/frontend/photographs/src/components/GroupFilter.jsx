@@ -1,7 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import './GroupFilter.css';
 
-function GroupFilter({ groups, label, selected, onChange }) {
+function GroupFilter({
+  groups, label, selected, onChange, counts,
+}) {
   const panel = useRef(null);
 
   useEffect(() => {
@@ -10,8 +12,18 @@ function GroupFilter({ groups, label, selected, onChange }) {
         panel.current.open = false;
       }
     };
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape' && panel.current?.open) {
+        panel.current.open = false;
+        panel.current.querySelector('summary')?.focus();
+      }
+    };
     document.addEventListener('click', closeOutside);
-    return () => document.removeEventListener('click', closeOutside);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('click', closeOutside);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
   }, []);
 
   if (!groups || groups.length < 2) {
@@ -51,6 +63,11 @@ function GroupFilter({ groups, label, selected, onChange }) {
                   onChange={() => toggle(group.id)}
                 />
                 <span>{group.label}</span>
+                {counts && (
+                  <span className="group-filter-count">
+                    {(counts[group.id] || 0).toLocaleString()}
+                  </span>
+                )}
               </label>
               <button type="button" onClick={() => choose([group.id])}>
                 only

@@ -12,6 +12,7 @@ const SearchResults = React.memo(({
   hasMore,
   heading,
   groupLabels,
+  notice,
 }) => {
   if (isLoading) {
     return (
@@ -31,8 +32,11 @@ const SearchResults = React.memo(({
 
   if (items.length === 0) {
     return (
-      <div className="no-results">
-        <p>Nothing matched. Try describing what the picture looks like.</p>
+      <div className="gallery-container">
+        {notice}
+        <div className="no-results">
+          <p>Nothing matched. Try describing what the picture looks like.</p>
+        </div>
       </div>
     );
   }
@@ -42,10 +46,11 @@ const SearchResults = React.memo(({
       <div className="results-heading">
         <h2>{heading}</h2>
         <p>
-          Each object appears once, even when it has several photos. Ranked by an AI
-          model, best matches first.
+          Each object appears once, even when it has several photos.
+          {notice ? '' : ' Ranked by an AI model, best matches first.'}
         </p>
       </div>
+      {notice}
       <ImageGrid items={items} groupLabels={groupLabels} />
       <Pagination
         currentPage={currentPage}

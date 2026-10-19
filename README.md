@@ -251,6 +251,14 @@ its rank in each channel, the record fields that matched and an explanation such
 read and, when the catalog matched nothing, why: "No records mention both “quilt” and
 “airplane”; showing visually similar items".
 
+The photographs site shows all of this. Above the results it says how it read the query,
+with a one-click way to search otherwise ("Treated as a name query; matching the
+catalog first · Search by appearance instead"), any spelling correction with "Search
+instead for", why the catalog found nothing, and which groups the results come from.
+Results the catalog matched carry a badge such as "Title matched". A switch offers Auto,
+Appearance and Catalog, and in Catalog mode the group filter shows how many matches each
+group holds. The choices are kept in the address (`mode=visual`, `exact=1`).
+
 ## Limits That Protect a Public Site
 
 Searching is the only expensive thing the site does, so it is the only thing that is

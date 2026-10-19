@@ -5,6 +5,8 @@ import ExampleQueries from './components/ExampleQueries';
 import GroupFilter from './components/GroupFilter';
 import ImageGrid from './components/ImageGrid';
 import ItemDetail from './components/ItemDetail';
+import ModeToggle from './components/ModeToggle';
+import SearchNotice from './components/SearchNotice';
 import SiteFooter from './components/SiteFooter';
 import {
   homeHref, imageSearchHref, searchHref, useHashRoute,
@@ -24,6 +26,7 @@ function App() {
   const [wallFailed, setWallFailed] = useState(false);
   const wallSeed = useRef(Math.floor(Math.random() * 1e9));
   const [results, setResults] = useState([]);
+  const [searchInfo, setSearchInfo] = useState(null);
   const [hasMore, setHasMore] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -97,13 +100,17 @@ function App() {
     }
 
     const request = isTextSearch
-      ? searchByText(route.query, RESULTS_PER_PAGE, route.page, selectedGroups)
+      ? searchByText(route.query, RESULTS_PER_PAGE, route.page, selectedGroups, {
+        mode: route.mode,
+        exact: route.exact,
+      })
       : searchByImage(uploadedImage, RESULTS_PER_PAGE, route.page, selectedGroups);
 
     request
-      .then((found) => {
+      .then(({ results: found, search }) => {
         if (isCurrent) {
           setResults(found);
+          setSearchInfo(search);
           setHasMore(found.length >= RESULTS_PER_PAGE);
         }
       })
@@ -117,7 +124,7 @@ function App() {
     return () => {
       isCurrent = false;
     };
-  }, [route.name, route.query, route.page, uploadedImage, selectedGroups]);
+  }, [route.name, route.query, route.page, route.mode, route.exact, uploadedImage, selectedGroups]);
 
   useEffect(() => {
     if (route.name === 'home') {
@@ -151,19 +158,23 @@ function App() {
   const handlePageChanged = useCallback((change) => {
     const page = typeof change === 'function' ? change(route.page) : change;
     navigate(route.name === 'search'
-      ? searchHref(route.query, page, selectedGroups)
+      ? searchHref(route.query, page, selectedGroups, { mode: route.mode, exact: route.exact })
       : imageSearchHref(page, selectedGroups));
-  }, [navigate, route.name, route.query, route.page, selectedGroups]);
+  }, [navigate, route.name, route.query, route.page, route.mode, route.exact, selectedGroups]);
 
   const handleGroupsChanged = useCallback((groups) => {
     if (route.name === 'search') {
-      navigate(searchHref(route.query, 1, groups));
+      navigate(searchHref(route.query, 1, groups, { mode: route.mode, exact: route.exact }));
     } else if (route.name === 'image-search') {
       navigate(imageSearchHref(1, groups));
     } else {
       navigate(homeHref(groups));
     }
-  }, [navigate, route.name, route.query]);
+  }, [navigate, route.name, route.query, route.mode, route.exact]);
+
+  const handleModeChanged = useCallback((mode) => {
+    navigate(searchHref(route.query, 1, selectedGroups, { mode, exact: route.exact }));
+  }, [navigate, route.query, route.exact, selectedGroups]);
 
   const isSearching = route.name === 'search' || route.name === 'image-search';
   const title = collection?.title || 'Digital Collection Explorer';
@@ -196,12 +207,20 @@ function App() {
                 onSearchByImage={handleSearchByImage}
                 onClearImage={handleImageCleared}
               />
-              <GroupFilter
-                groups={collection?.groups}
-                label={collection?.group_label}
-                selected={selectedGroups}
-                onChange={handleGroupsChanged}
-              />
+              <div className="search-options">
+                <GroupFilter
+                  groups={collection?.groups}
+                  label={collection?.group_label}
+                  selected={selectedGroups}
+                  onChange={handleGroupsChanged}
+                  counts={route.name === 'search' && route.mode === 'keyword'
+                    ? searchInfo?.keyword?.groups
+                    : undefined}
+                />
+                {route.name === 'search' && collection?.catalog_search && (
+                  <ModeToggle mode={route.mode} onChange={handleModeChanged} />
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -247,6 +266,18 @@ function App() {
             hasMore={hasMore}
             heading={route.name === 'search' ? `Results for “${route.query}”` : 'Images like the one you uploaded'}
             groupLabels={groupLabels}
+            notice={route.name === 'search' && searchInfo && !isLoading ? (
+              <SearchNotice
+                search={searchInfo}
+                query={route.query}
+                groups={selectedGroups}
+                mode={route.mode}
+                exact={route.exact}
+                results={results}
+                groupLabels={groupLabels}
+                groupLabel={collection?.group_label}
+              />
+            ) : null}
           />
         )}
 

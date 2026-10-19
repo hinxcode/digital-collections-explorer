@@ -1,0 +1,31 @@
+.mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.15rem;
+  font-size: 0.85rem;
+  border: 1px solid #4a4038;
+  border-radius: 999px;
+}
+
+.mode-toggle-label {
+  padding: 0 0.45rem 0 0.6rem;
+  color: #9a9a9a;
+}
+
+.mode-toggle button {
+  padding: 0.25rem 0.75rem;
+  font-size: inherit;
+  color: #d0b49f;
+  background: none;
+  border-radius: 999px;
+}
+
+.mode-toggle button:hover {
+  background-color: #2e2a26;
+}
+
+.mode-toggle button.is-active {
+  color: #f8f5f0;
+  background-color: #8b5a2b;
+}

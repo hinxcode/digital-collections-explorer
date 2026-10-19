@@ -129,6 +129,16 @@ class CollectionService:
             and (numbers is None or self.object_groups.get(o, set()) & numbers)
         ]
 
+    def group_counts(self, object_ids: List[str]) -> Dict[str, int]:
+        """How many of these objects each group holds, leaving out empty groups"""
+        self._ensure_index()
+        counts = Counter(n for o in object_ids for n in self.object_groups.get(o, ()))
+        return {
+            group["id"]: counts[number]
+            for number, group in enumerate(self.groups)
+            if counts[number]
+        }
+
     def first_image(self, object_id: str, groups: Optional[List[str]] = None) -> int:
         """The row of an object's first image in the given groups"""
         self._ensure_index()

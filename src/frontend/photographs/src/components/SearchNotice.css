@@ -1,0 +1,39 @@
+.search-notice {
+  margin: 0.6rem 0 1.2rem;
+  text-align: left;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: #b0b0b0;
+}
+
+.search-notice p {
+  margin: 0.15rem 0;
+}
+
+.search-notice a {
+  color: #d0b49f;
+  text-decoration: none;
+}
+
+.search-notice a:hover,
+.search-notice a:focus-visible {
+  text-decoration: underline;
+}
+
+.search-notice strong {
+  color: #f8f5f0;
+  font-weight: 600;
+}
+
+.search-notice-reading {
+  color: #e6e1da;
+}
+
+.search-notice-empty {
+  color: #e2c39b;
+}
+
+.search-notice-spread {
+  font-size: 0.85rem;
+  color: #9a9a9a;
+}
