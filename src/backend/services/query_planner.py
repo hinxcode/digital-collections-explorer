@@ -190,7 +190,7 @@ def keyword_expression(
     terms = (
         content + [p for p in phrases if words(p)] + [v for _, v in fields if words(v)]
     )
-    return (" ".join(parts) or None), terms
+    return (" AND ".join(parts) or None), terms
 
 
 def read_syntax(

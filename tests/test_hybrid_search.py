@@ -204,6 +204,12 @@ def test_a_word_also_matches_its_plural_or_singular_when_the_catalog_uses_it(hyb
     assert objects(run(hybrid, "quilts", mode="keyword")) == ["rec-a", "rec-c"]
 
 
+def test_several_words_with_other_forms_are_all_required(hybrid):
+    plan = plan_query("quilt star", hybrid.index)
+    assert plan.expression == '("quilt" OR "quilts") AND ("star" OR "stars")'
+    assert objects(run(hybrid, "quilt star", mode="keyword")) == ["rec-a"]
+
+
 def test_little_words_are_not_required_in_the_catalog(hybrid):
     assert plan_query("a quilt with stars", hybrid.index).terms == ["quilt", "stars"]
 
