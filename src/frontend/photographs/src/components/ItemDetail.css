@@ -167,6 +167,12 @@
   color: #f8f5f0;
 }
 
+.item-detail-group {
+  margin: -0.6rem 0 1rem;
+  font-size: 0.95rem;
+  color: #d0b49f;
+}
+
 .item-detail-source {
   display: inline-flex;
   gap: 0.6rem;
@@ -220,6 +226,31 @@
   margin: 0;
   color: #e6e1da;
   overflow-wrap: anywhere;
+}
+
+.item-detail-facts .item-detail-record {
+  display: block;
+}
+
+.item-detail-record div {
+  display: grid;
+  grid-template-columns: minmax(7rem, 32%) 1fr;
+  column-gap: 1.2rem;
+  padding: 0.45rem 0;
+  border-top: 1px solid #2e2e2e;
+}
+
+.item-detail-record div:last-child {
+  border-bottom: 1px solid #2e2e2e;
+}
+
+.item-detail-record dd {
+  grid-column: 2;
+  line-height: 1.45;
+}
+
+.item-detail-record dd + dd {
+  margin-top: 0.35rem;
 }
 
 .item-detail-note,

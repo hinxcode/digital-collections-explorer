@@ -1,11 +1,14 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import SearchBar from './components/SearchBar';
 import SearchResults from './components/SearchResults';
 import ExampleQueries from './components/ExampleQueries';
+import GroupFilter from './components/GroupFilter';
 import ImageGrid from './components/ImageGrid';
 import ItemDetail from './components/ItemDetail';
 import SiteFooter from './components/SiteFooter';
-import { searchHref, useHashRoute } from './hooks/useHashRoute';
+import {
+  homeHref, imageSearchHref, searchHref, useHashRoute,
+} from './hooks/useHashRoute';
 import { getCollection, getSample, searchByImage, searchByText } from './services/api';
 import './App.css';
 
@@ -27,6 +30,13 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [uploadedImage, setUploadedImage] = useState(null);
   const searchInputRef = useRef(null);
+  const groupsKey = (route.groups || []).join(',');
+  const selectedGroups = useMemo(() => groupsKey.split(',').filter(Boolean), [groupsKey]);
+  const wallGroups = useRef(groupsKey);
+  const groupLabels = useMemo(
+    () => Object.fromEntries((collection?.groups || []).map((group) => [group.id, group.label])),
+    [collection],
+  );
 
   useEffect(() => {
     getCollection()
@@ -43,17 +53,28 @@ function App() {
   const extendWall = useCallback(() => {
     setWallIsLoading(true);
     setWallFailed(false);
-    getSample(WALL_SIZE, wallSeed.current, wall.length)
+    getSample(WALL_SIZE, wallSeed.current, wall.length, selectedGroups)
       .then(({ results: more, has_more: hasMoreImages }) => {
-        setWall((shown) => [...shown, ...more]);
-        setWallHasMore(hasMoreImages);
+        if (wallGroups.current === groupsKey) {
+          setWall((shown) => [...shown, ...more]);
+          setWallHasMore(hasMoreImages);
+        }
       })
       .catch((loadError) => {
         console.error('Failed to load images:', loadError);
         setWallFailed(true);
       })
       .finally(() => setWallIsLoading(false));
-  }, [wall.length]);
+  }, [wall.length, groupsKey, selectedGroups]);
+
+  useEffect(() => {
+    if (route.name === 'home' && wallGroups.current !== groupsKey) {
+      wallGroups.current = groupsKey;
+      setWall([]);
+      setWallHasMore(false);
+      setWallFailed(false);
+    }
+  }, [route.name, groupsKey]);
 
   useEffect(() => {
     if (route.name === 'home' && wall.length === 0 && !wallIsLoading && !wallFailed) {
@@ -76,8 +97,8 @@ function App() {
     }
 
     const request = isTextSearch
-      ? searchByText(route.query, RESULTS_PER_PAGE, route.page)
-      : searchByImage(uploadedImage, RESULTS_PER_PAGE, route.page);
+      ? searchByText(route.query, RESULTS_PER_PAGE, route.page, selectedGroups)
+      : searchByImage(uploadedImage, RESULTS_PER_PAGE, route.page, selectedGroups);
 
     request
       .then((found) => {
@@ -96,7 +117,7 @@ function App() {
     return () => {
       isCurrent = false;
     };
-  }, [route.name, route.query, route.page, uploadedImage]);
+  }, [route.name, route.query, route.page, uploadedImage, selectedGroups]);
 
   useEffect(() => {
     if (route.name === 'home') {
@@ -106,33 +127,43 @@ function App() {
 
   useEffect(() => {
     if (route.name === 'image-search' && !uploadedImage) {
-      navigate('#/');
+      navigate(homeHref(selectedGroups));
     }
-  }, [route.name, uploadedImage, navigate]);
+  }, [route.name, uploadedImage, navigate, selectedGroups]);
 
   const handleSearchByText = useCallback((query) => {
     if (query.trim()) {
-      navigate(searchHref(query.trim()));
+      navigate(searchHref(query.trim(), 1, selectedGroups));
     }
-  }, [navigate]);
+  }, [navigate, selectedGroups]);
 
   const handleSearchByImage = useCallback((image) => {
     setUploadedImage(image);
     setSearchQuery('');
-    navigate('#/image-search');
-  }, [navigate]);
+    navigate(imageSearchHref(1, selectedGroups));
+  }, [navigate, selectedGroups]);
 
   const handleImageCleared = useCallback(() => {
     setUploadedImage(null);
-    navigate('#/');
-  }, [navigate]);
+    navigate(homeHref(selectedGroups));
+  }, [navigate, selectedGroups]);
 
   const handlePageChanged = useCallback((change) => {
     const page = typeof change === 'function' ? change(route.page) : change;
     navigate(route.name === 'search'
-      ? searchHref(route.query, page)
-      : `#/image-search?page=${page}`);
-  }, [navigate, route.name, route.query, route.page]);
+      ? searchHref(route.query, page, selectedGroups)
+      : imageSearchHref(page, selectedGroups));
+  }, [navigate, route.name, route.query, route.page, selectedGroups]);
+
+  const handleGroupsChanged = useCallback((groups) => {
+    if (route.name === 'search') {
+      navigate(searchHref(route.query, 1, groups));
+    } else if (route.name === 'image-search') {
+      navigate(imageSearchHref(1, groups));
+    } else {
+      navigate(homeHref(groups));
+    }
+  }, [navigate, route.name, route.query]);
 
   const isSearching = route.name === 'search' || route.name === 'image-search';
   const title = collection?.title || 'Digital Collection Explorer';
@@ -155,27 +186,38 @@ function App() {
       <main className="App-main">
         {route.name !== 'item' && (
           <div className="search-controls">
-            <SearchBar
-              inputRef={searchInputRef}
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-              uploadedImage={route.name === 'image-search' ? uploadedImage : null}
-              onSearchByText={handleSearchByText}
-              onSearchByImage={handleSearchByImage}
-              onClearImage={handleImageCleared}
-            />
+            <div className="search-column">
+              <SearchBar
+                inputRef={searchInputRef}
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                uploadedImage={route.name === 'image-search' ? uploadedImage : null}
+                onSearchByText={handleSearchByText}
+                onSearchByImage={handleSearchByImage}
+                onClearImage={handleImageCleared}
+              />
+              <GroupFilter
+                groups={collection?.groups}
+                label={collection?.group_label}
+                selected={selectedGroups}
+                onChange={handleGroupsChanged}
+              />
+            </div>
           </div>
         )}
 
         {route.name === 'home' && (
           <>
-            <ExampleQueries queries={collection?.example_queries} />
+            <ExampleQueries
+              queries={collection?.example_queries}
+              groups={selectedGroups}
+            />
             <section className="wall">
               <div className="wall-heading">
                 <h2>Browse the collection</h2>
                 <p>A random selection. Select any image to see it larger and find similar ones.</p>
               </div>
-              <ImageGrid items={wall} />
+              <ImageGrid items={wall} groupLabels={groupLabels} />
               {wallFailed && (
                 <div className="wall-more">
                   <p>The images could not be loaded.</p>
@@ -204,6 +246,7 @@ function App() {
             setCurrentPage={handlePageChanged}
             hasMore={hasMore}
             heading={route.name === 'search' ? `Results for “${route.query}”` : 'Images like the one you uploaded'}
+            groupLabels={groupLabels}
           />
         )}
 

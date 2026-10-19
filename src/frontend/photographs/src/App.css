@@ -133,6 +133,15 @@ button:hover {
   padding: 0.5rem 1.5rem 0;
 }
 
+.search-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
 .gallery-container {
   margin-top: 2rem;
   width: 100%;

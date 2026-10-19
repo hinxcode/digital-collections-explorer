@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+const groupsFrom = (params) => (params.get('groups') || '').split(',').filter(Boolean);
+
 const parse = (hash) => {
   const [path, queryString = ''] = hash.replace(/^#/, '').split('?');
   const params = new URLSearchParams(queryString);
@@ -8,23 +10,44 @@ const parse = (hash) => {
   if (segments[0] === 'item' && segments[1]) {
     return { name: 'item', id: decodeURIComponent(segments[1]) };
   }
+  const groups = groupsFrom(params);
   if (segments[0] === 'search' && params.get('q')) {
-    return { name: 'search', query: params.get('q'), page: Number(params.get('page')) || 1 };
+    return {
+      name: 'search', query: params.get('q'), page: Number(params.get('page')) || 1, groups,
+    };
   }
   if (segments[0] === 'image-search') {
-    return { name: 'image-search', page: Number(params.get('page')) || 1 };
+    return { name: 'image-search', page: Number(params.get('page')) || 1, groups };
   }
-  return { name: 'home' };
+  return { name: 'home', groups };
+};
+
+const hashFor = (path, params, groups) => {
+  if (groups.length > 0) {
+    params.set('groups', groups.join(','));
+  }
+  const query = params.toString().replace(/%2C/gi, ',');
+  return query ? `#/${path}?${query}` : `#/${path}`;
 };
 
 export const itemHref = (id) => `#/item/${encodeURIComponent(id)}`;
 
-export const searchHref = (query, page = 1) => {
+export const homeHref = (groups = []) => hashFor('', new URLSearchParams(), groups);
+
+export const searchHref = (query, page = 1, groups = []) => {
   const params = new URLSearchParams({ q: query });
   if (page > 1) {
     params.set('page', page);
   }
-  return `#/search?${params.toString()}`;
+  return hashFor('search', params, groups);
+};
+
+export const imageSearchHref = (page = 1, groups = []) => {
+  const params = new URLSearchParams();
+  if (page > 1) {
+    params.set('page', page);
+  }
+  return hashFor('image-search', params, groups);
 };
 
 const HOME = '#/';

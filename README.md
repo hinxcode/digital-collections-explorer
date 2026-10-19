@@ -190,6 +190,8 @@ my-collection/
     metadata.sqlite      items(id, group_id, record_id, file_name, width, height,
                                thumbnail, processed, original)
                          records(record_id, title, source_url)
+                         optional: record_fields(record_id, position, label, value)
+                                   record_facets(record_id, facet, value)
   thumbnails/  processed/   the image files that items point to, relative to my-collection
 ```
 
@@ -205,7 +207,12 @@ address, in which case `/static/<id>` sends the visitor there.
 Searches, samples and similar images take `groups=nmah,saam`; leave it out to cover
 every group. Images in the chosen groups are ranked together exactly as one index
 would rank them. `/api/collection` lists the groups with their numbers of images and
-objects.
+objects. The photographs site shows each image's group and offers a filter that keeps
+the chosen groups in the address, so a filtered search can be shared.
+
+When `record_fields` is present, an item page lists its record's fields in their
+`position` order, with repeated labels grouped together, and `/api/items/<id>` returns
+them with the record's facets under `record`.
 
 ## Limits That Protect a Public Site
 
