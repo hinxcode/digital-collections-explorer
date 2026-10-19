@@ -30,6 +30,7 @@ const ImageGrid = React.memo(({ items, size = 'regular', groupLabels = {} }) => 
       const title = titleOf(item);
       const photoCount = item.image_count || 1;
       const groupLabel = groupLabels[item.metadata?.group];
+      const catalogMatch = item.explanation?.split(' · ').find((part) => part.endsWith('matched'));
 
       return (
         <li key={item.id} className="image-grid-cell" style={{ '--ratio': aspectRatioOf(item) }}>
@@ -38,7 +39,9 @@ const ImageGrid = React.memo(({ items, size = 'regular', groupLabels = {} }) => 
             <span className="image-grid-caption">
               {title || 'Uncataloged image'}
               {groupLabel && <span className="image-grid-group">{groupLabel}</span>}
+              {item.explanation && <span className="image-grid-why">{item.explanation}</span>}
             </span>
+            {catalogMatch && <span className="image-grid-match">{catalogMatch}</span>}
             {photoCount > 1 && (
               <span className="image-grid-badge">
                 <PhotosIcon />

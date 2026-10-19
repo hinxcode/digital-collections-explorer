@@ -25,17 +25,19 @@ const failure = async (response) => {
  * @param {number} page - Page number for pagination (default: 1)
  * @returns {Promise<Array>} - Array of search results
  */
-export const searchByText = async (query, limit = 50, page = 1, groups = []) => {
+export const searchByText = async (query, limit = 50, page = 1, groups = [], { mode = 'auto', exact = false } = {}) => {
   try {
     const pageParam = Math.max(1, parseInt(page) || 1);
-    const response = await fetch(`${API_URL}/api/search/text?query=${encodeURIComponent(query)}&limit=${limit}&page=${pageParam}${groupsParam(groups)}`);
+    const modeParam = mode !== 'auto' ? `&mode=${mode}` : '';
+    const spellingParam = exact ? '&correct_spelling=false' : '';
+    const response = await fetch(`${API_URL}/api/search/text?query=${encodeURIComponent(query)}&limit=${limit}&page=${pageParam}${groupsParam(groups)}${modeParam}${spellingParam}`);
     
     if (!response.ok) {
       throw await failure(response);
     }
     
-    const { results } = await response.json();
-    return results;
+    const { results, search = null } = await response.json();
+    return { results, search };
   } catch (error) {
     console.error('Error searching photos:', error);
     throw error;
@@ -69,7 +71,7 @@ export const searchByImage = async (image, limit = 50, page = 1, groups = []) =>
     }
     
     const { results } = await response.json();
-    return results;
+    return { results, search: null };
   } catch (error) {
     console.error('Error in image search:', error);
     throw error;

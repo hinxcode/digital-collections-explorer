@@ -1,7 +1,5 @@
 .group-filter {
   position: relative;
-  align-self: flex-start;
-  margin-left: 1.3rem;
   font-size: 0.9rem;
 }
 
@@ -94,6 +92,13 @@
   cursor: pointer;
 }
 
+.group-filter-count {
+  margin-left: auto;
+  padding-left: 0.8rem;
+  font-size: 0.8rem;
+  color: #9a9a9a;
+}
+
 .group-filter-panel input {
   width: auto;
   margin: 0;
@@ -138,8 +143,3 @@
   }
 }
 
-@media (max-width: 600px) {
-  .group-filter {
-    margin-left: 0;
-  }
-}

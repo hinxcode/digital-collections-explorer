@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+export const SEARCH_MODES = ['auto', 'visual', 'keyword', 'hybrid'];
+
 const groupsFrom = (params) => (params.get('groups') || '').split(',').filter(Boolean);
 
 const parse = (hash) => {
@@ -13,7 +15,12 @@ const parse = (hash) => {
   const groups = groupsFrom(params);
   if (segments[0] === 'search' && params.get('q')) {
     return {
-      name: 'search', query: params.get('q'), page: Number(params.get('page')) || 1, groups,
+      name: 'search',
+      query: params.get('q'),
+      page: Number(params.get('page')) || 1,
+      groups,
+      mode: SEARCH_MODES.includes(params.get('mode')) ? params.get('mode') : 'auto',
+      exact: params.get('exact') === '1',
     };
   }
   if (segments[0] === 'image-search') {
@@ -34,10 +41,16 @@ export const itemHref = (id) => `#/item/${encodeURIComponent(id)}`;
 
 export const homeHref = (groups = []) => hashFor('', new URLSearchParams(), groups);
 
-export const searchHref = (query, page = 1, groups = []) => {
+export const searchHref = (query, page = 1, groups = [], { mode = 'auto', exact = false } = {}) => {
   const params = new URLSearchParams({ q: query });
   if (page > 1) {
     params.set('page', page);
+  }
+  if (mode !== 'auto') {
+    params.set('mode', mode);
+  }
+  if (exact) {
+    params.set('exact', '1');
   }
   return hashFor('search', params, groups);
 };

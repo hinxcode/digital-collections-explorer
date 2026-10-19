@@ -142,6 +142,20 @@ button:hover {
   margin: 0 auto;
 }
 
+.search-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  margin-left: 1.3rem;
+}
+
+@media (max-width: 600px) {
+  .search-options {
+    margin-left: 0;
+  }
+}
+
 .gallery-container {
   margin-top: 2rem;
   width: 100%;
