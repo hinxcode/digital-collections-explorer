@@ -76,6 +76,14 @@ def llms_txt(collection: Dict[str, Any], base_path: str = "") -> str:
     if license_info.get("name"):
         note = f" ({license_info['note']})" if license_info.get("note") else ""
         lines += [f"License: {license_info['name']}{note}.", ""]
+    groups = collection.get("groups") or []
+    group_hint = ""
+    if groups:
+        kind = (collection.get("group_label") or "group").lower()
+        listed = ", ".join(f"{g['label']} (`{g['id']}`)" for g in groups)
+        lines += [f"Each image belongs to one {kind}: {listed}.", ""]
+        example = ",".join(g["id"] for g in groups[:2])
+        group_hint = f", and `groups` such as `{example}` to search only some"
     lines += [
         "Visitors search the collection by describing what they are looking for in plain",
         "language, or by uploading a picture. No catalog or metadata is needed: search",
@@ -84,7 +92,8 @@ def llms_txt(collection: Dict[str, Any], base_path: str = "") -> str:
         "## Searching",
         "",
         f"- [Text search]({base_path}/api/search/text?query=a+steam+locomotive): "
-        "GET with `query`, optional `limit` and `page`; returns ranked images",
+        f"GET with `query`, optional `limit` and `page`{group_hint}; "
+        "returns ranked images",
         f"- [Image search]({base_path}/api/search/image): "
         "POST an image file; returns similar images",
         f"- [About this collection]({base_path}/api/collection): "

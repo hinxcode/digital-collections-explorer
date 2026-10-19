@@ -8,7 +8,8 @@ fi
 
 case "$command" in
 serve)
-    if [ ! -f "$DCE_DATA_DIR/embeddings/embeddings.pt" ]; then
+    if [ ! -f "$DCE_DATA_DIR/embeddings/embeddings.pt" ] &&
+        [ ! -f "$DCE_DATA_DIR/embeddings/metadata.sqlite" ]; then
         echo "No search index found in $DCE_DATA_DIR."
         echo "Build one first, with the same folder mounted at $DCE_DATA_DIR:"
         echo "  docker run --rm -v <collection-folder>:$DCE_DATA_DIR -v <images>:/source:ro <image> ingest /source"

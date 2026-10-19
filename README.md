@@ -174,6 +174,36 @@ address. Images are grouped into objects by a column named `object_id`, `record_
 `item_id` or `group_id`. Collections without a catalog still work: every image is
 then its own object and is shown as uncataloged.
 
+## Collections Split into Groups
+
+A collection built by your own pipeline can be split into groups, such as the museums
+of one institution, with a vector shard for each group. The site serves it from this
+layout and lets every search name the groups it covers:
+
+```
+my-collection/
+  collection.json        as above; "group_label" names a group to visitors, e.g. "Museum"
+  embeddings/
+    index_info.json      {"format": 2, "models": [...], "groups": [{"id": "nmah", "label": "..."}]}
+    vectors/<model key>/<group id>.npy       float32, one L2-normalized row per image
+    vectors/<model key>/<group id>.ids.npy   the id of the image in each row
+    metadata.sqlite      items(id, group_id, record_id, file_name, width, height,
+                               thumbnail, processed, original)
+                         records(record_id, title, source_url)
+  thumbnails/  processed/   the image files that items point to, relative to my-collection
+```
+
+Each entry in `models` has a `key` (its folder under `vectors/`), a `name` and its
+`dimensions`. The site uses the vectors of the model it is configured with and refuses
+to start if the index holds none from it. Images of the same record are shown as one
+object, and the record's `source_url` is the link back. `original` may be a web
+address, in which case `/static/<id>` sends the visitor there.
+
+Searches, samples and similar images take `groups=nmah,saam`; leave it out to cover
+every group. Images in the chosen groups are ranked together exactly as one index
+would rank them. `/api/collection` lists the groups with their numbers of images and
+objects.
+
 ## Limits That Protect a Public Site
 
 Searching is the only expensive thing the site does, so it is the only thing that is

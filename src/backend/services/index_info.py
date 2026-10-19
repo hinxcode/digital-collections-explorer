@@ -13,6 +13,21 @@ KNOWN_DIMENSIONS = {
     768: "google/siglip-base-patch16-224",
 }
 
+# The index_info.json format of a collection split into groups, one shard per group.
+GROUPED_FORMAT = 2
+
+
+def is_grouped(info: Optional[dict]) -> bool:
+    """Whether index_info.json describes a collection split into groups"""
+    return bool(info) and info.get("format") == GROUPED_FORMAT
+
+
+def grouped_model(info: dict, model_name: str) -> Optional[dict]:
+    """The entry for a model in a grouped index, if the index holds its vectors"""
+    return next(
+        (m for m in info.get("models", []) if m.get("name") == model_name), None
+    )
+
 
 def write_index_info(
     embeddings_dir: Path, model_type: str, model_name: str, dimensions: int, items: int
@@ -46,6 +61,10 @@ def describe_mismatch(
 ) -> Optional[str]:
     """Explain why the index cannot be searched with the configured model, if so"""
     info = read_index_info(embeddings_dir)
+    if is_grouped(info):
+        return describe_grouped_mismatch(
+            embeddings_dir, info, index_dimensions, model_name, model_dimensions
+        )
     built_with = info["model_name"] if info else KNOWN_DIMENSIONS.get(index_dimensions)
 
     same_name = info is None or info["model_name"] == model_name
@@ -62,4 +81,23 @@ def describe_mismatch(
         f"The index in {embeddings_dir} was built {origin}, but config.json is set to "
         f"{model_name}. Searching it would return meaningless results.\n"
         f"Either {fix}, or build a new index with {model_name} in a new folder."
+    )
+
+
+def describe_grouped_mismatch(
+    embeddings_dir: Path,
+    info: dict,
+    index_dimensions: Optional[int],
+    model_name: str,
+    model_dimensions: Optional[int],
+) -> Optional[str]:
+    """Explain why a grouped index cannot be searched with the configured model"""
+    names = [m.get("name") for m in info.get("models", [])]
+    if model_name in names and index_dimensions == model_dimensions:
+        return None
+    held = ", ".join(n for n in names if n) or "no model"
+    return (
+        f"The index in {embeddings_dir} holds vectors from {held}, but the site is "
+        f"set to {model_name}. Searching it would return meaningless results.\n"
+        f"Choose one of the models the index holds, or build vectors for {model_name}."
     )

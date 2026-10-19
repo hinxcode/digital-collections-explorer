@@ -168,3 +168,19 @@ def test_api_docs_know_where_the_site_lives(site_under_maps):
     docs = site_under_maps.get("/maps/docs")
     assert docs.status_code == 200
     assert "/maps/openapi.json" in docs.text
+
+
+def test_llms_txt_names_the_groups_of_a_collection_split_into_groups():
+    grouped = {
+        "title": "Nine Smithsonian Museums",
+        "group_label": "Museum",
+        "groups": [
+            {"id": "nmah", "label": "National Museum of American History"},
+            {"id": "npg", "label": "National Portrait Gallery"},
+        ],
+    }
+    text = site_pages.llms_txt(grouped)
+    assert "Each image belongs to one museum:" in text
+    assert "National Portrait Gallery (`npg`)" in text
+    assert "`groups` such as `nmah,npg`" in text
+    assert "`groups`" not in site_pages.llms_txt({"title": "Maps"})
