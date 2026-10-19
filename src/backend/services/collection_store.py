@@ -145,6 +145,18 @@ def read_grouped_metadata(path: Path) -> Dict[str, Dict[str, Any]]:
     return metadata
 
 
+def has_table(path: Path, name: str) -> bool:
+    """Whether metadata.sqlite exists and holds a table of this name"""
+    if not path.exists():
+        return False
+    con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    try:
+        found = con.execute("SELECT 1 FROM sqlite_master WHERE name = ?", (name,))
+        return found.fetchone() is not None
+    finally:
+        con.close()
+
+
 def read_record_details(path: Path, record_id: str) -> Dict[str, Any]:
     """The catalog fields and facets of one record, when metadata.sqlite keeps them"""
     fields: List[Dict[str, str]] = []

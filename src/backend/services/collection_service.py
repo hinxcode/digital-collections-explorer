@@ -5,13 +5,13 @@ import logging
 import random
 from collections import Counter
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 import torch
 
 from ..core.config import settings
 from .catalog_fields import object_id_from, source_url_from
-from .collection_store import METADATA_DB, read_record_details
+from .collection_store import METADATA_DB, has_table, read_record_details
 from .embedding_service import EmbeddingService, embedding_service
 from .index_info import is_grouped, read_index_info
 
@@ -116,6 +116,51 @@ class CollectionService:
             return list(self.members)
         return [o for o in self.members if self.object_groups[o] & numbers]
 
+    def objects_among(
+        self, object_ids: List[str], groups: Optional[List[str]] = None
+    ) -> List[str]:
+        """The given objects that this collection shows in the given groups, in order"""
+        self._ensure_index()
+        numbers = self._numbers(groups)
+        return [
+            o
+            for o in object_ids
+            if o in self.members
+            and (numbers is None or self.object_groups.get(o, set()) & numbers)
+        ]
+
+    def first_image(self, object_id: str, groups: Optional[List[str]] = None) -> int:
+        """The row of an object's first image in the given groups"""
+        self._ensure_index()
+        numbers = self._numbers(groups)
+        members = self.members[object_id]
+        if numbers is not None and self.row_group:
+            members = [m for m in members if self.row_group[m] in numbers] or members
+        return members[0]
+
+    def ranked_objects(
+        self, scores: torch.Tensor, limit: int, groups: Optional[List[str]] = None
+    ) -> List[Tuple[str, int, float]]:
+        """Objects by their best image's raw similarity, with that image and score"""
+        self._ensure_index()
+        flat = scores.flatten()
+        mask = self.group_mask(groups)
+        if mask is not None:
+            flat = flat.masked_fill(~mask, float("-inf"))
+        found: List[Tuple[str, int, float]] = []
+        seen: Set[str] = set()
+        for index in torch.argsort(flat, descending=True).tolist():
+            if mask is not None and not bool(mask[index]):
+                break
+            object_id = self.object_ids[index]
+            if object_id in seen:
+                continue
+            seen.add(object_id)
+            found.append((object_id, index, float(flat[index])))
+            if len(found) >= limit:
+                break
+        return found
+
     def group_summary(self) -> List[Dict[str, Any]]:
         """Each group with how many images and objects it holds"""
         self._ensure_index()
@@ -158,6 +203,9 @@ class CollectionService:
             "built_at": index.get("built_at"),
         }
         described["groups"] = self.group_summary()
+        described["catalog_search"] = is_grouped(index) and has_table(
+            Path(self.embeddings.embeddings_dir) / METADATA_DB, "records_fts"
+        )
         return described
 
     def sample(

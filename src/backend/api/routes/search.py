@@ -11,6 +11,7 @@ from ...models.schemas import SearchResponse, SearchResult
 from ...services.collection_service import collection_service
 from ...services.embedding_service import embedding_service
 from ...services.embedding_service_factory import create_embedding_service
+from ...services.hybrid_search import HybridSearch
 from ...services.limits import (
     MAX_UPLOAD_PIXELS,
     limit_searches,
@@ -18,6 +19,7 @@ from ...services.limits import (
     search_queue,
 )
 from ...services.model_choice import choose_model
+from ...services.query_planner import SEARCH_MODES
 from ..groups import GROUPS_DESCRIPTION, checked_groups
 
 choose_model(settings)
@@ -26,6 +28,15 @@ model_service = create_embedding_service()
 MAX_QUERY_CHARACTERS = 500
 MAX_RESULTS_PER_PAGE = 200
 MAX_PAGE = 1000
+MODE_DESCRIPTION = (
+    "auto reads the query and weighs appearance against the catalog; visual, keyword "
+    "and hybrid (equal weights) decide for it"
+)
+SPELLING_DESCRIPTION = (
+    "Correct a word the catalog never uses to a common one; the response says so"
+)
+
+hybrid_search = HybridSearch(collection_service)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -80,11 +91,31 @@ async def search_by_text(
         True, description="Show each object once, however many images it has"
     ),
     groups: Optional[str] = Query(None, description=GROUPS_DESCRIPTION),
+    mode: str = Query(
+        "auto", pattern=f"^({'|'.join(SEARCH_MODES)})$", description=MODE_DESCRIPTION
+    ),
+    correct_spelling: bool = Query(True, description=SPELLING_DESCRIPTION),
 ):
-    """Search for similar content using text query."""
+    """Search by text: by appearance and, when the collection keeps records, by catalog text."""
     wanted = checked_groups(groups)
+    hybrid = hybrid_search.index is not None
+    if mode == "keyword" and not hybrid:
+        raise HTTPException(
+            status_code=400, detail="This collection has no catalog text to search"
+        )
 
     def search():
+        if hybrid:
+            found = hybrid_search.search(
+                query,
+                model_service.encode_text,
+                limit,
+                page,
+                wanted,
+                mode,
+                correct_spelling,
+            )
+            return SearchResponse(**found)
         embedding = model_service.encode_text(query)
         return ranked_results(embedding, limit, page, group_by_object, wanted)
 
