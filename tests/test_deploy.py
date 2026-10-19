@@ -41,6 +41,7 @@ def test_estimate_never_shows_a_total_it_cannot_back_up(estimate_cost):
         "deploy/aws/update.sh",
         "deploy/aws/describe.sh",
         "deploy/aws/configure.sh",
+        "deploy/aws/import.sh",
     ],
 )
 def test_scripts_parse_and_explain_themselves(script):
@@ -573,3 +574,106 @@ def test_a_restricted_site_cannot_be_kept_restricted_under_https(fake_deploy):
     )
     assert result.returncode != 0
     assert deploys == []
+
+
+def test_import_sends_the_prepared_collection_to_the_machine(fake_deploy, tmp_path):
+    result, _ = fake_deploy(
+        True,
+        "--from",
+        "s3://my-bucket/dce/20261012T063839Z.3",
+        "--image",
+        "example/image:2",
+        script="import.sh",
+    )
+    assert result.returncode == 0, result.stderr
+    sent = sent_commands(tmp_path)[-1]
+    assert (
+        "import --name demo --from s3://my-bucket/dce/20261012T063839Z.3"
+        " --image example/image:2" in sent
+    )
+    assert "keeps its current data" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "source", ["/home/me/prepared", "s3://my-bucket/dce/$(reboot)", "s3://my bucket/x"]
+)
+def test_import_refuses_anything_but_a_plain_s3_address(fake_deploy, tmp_path, source):
+    result, _ = fake_deploy(True, "--from", source, script="import.sh")
+    assert result.returncode != 0
+    assert "s3://" in result.stderr
+    assert sent_commands(tmp_path) == []
+
+
+LOGGING_DOCKER = """#!/usr/bin/env bash
+echo "$*" >> "{log}"
+"""
+
+
+@pytest.fixture()
+def import_site(tmp_path):
+    import os
+
+    data_root = tmp_path / "dce"
+    current = data_root / "collections" / "demo"
+    (current / "embeddings").mkdir(parents=True)
+    (current / "embeddings" / "embeddings.pt").write_text("old index")
+    (current / "settings.json").write_text('{"max_upload_mb": 20}')
+    runner = data_root / "run-demo.sh"
+    runner.write_text('docker run "example/image:1" serve\n')
+    runner.chmod(0o755)
+    prepared = tmp_path / "prepared"
+    (prepared / "embeddings").mkdir(parents=True)
+    (prepared / "embeddings" / "index_info.json").write_text('{"format": 2}')
+    (prepared / "embeddings" / "metadata.sqlite").write_text("")
+    (prepared / "collection.json").write_text('{"title": "Nine Museums"}')
+    fake_bin = tmp_path / "docker-bin"
+    fake_bin.mkdir()
+    log = tmp_path / "docker.log"
+    (fake_bin / "docker").write_text(LOGGING_DOCKER.format(log=log))
+    (fake_bin / "docker").chmod(0o755)
+    env = {**os.environ, "PATH": f"{fake_bin}:{os.environ['PATH']}"}
+
+    def run(*flags, name="demo"):
+        command = ["bash", str(ROOT / "deploy/bootstrap.sh"), "import"]
+        command += ["--name", name, "--data-root", str(data_root), *flags]
+        return subprocess.run(command, capture_output=True, text=True, env=env)
+
+    return run, current, prepared, runner, log
+
+
+def test_bootstrap_import_swaps_in_the_prepared_collection_and_keeps_the_old_one(
+    import_site,
+):
+    run, current, prepared, runner, log = import_site
+    result = run("--from", str(prepared), "--image", "example/image:2")
+    assert result.returncode == 0, result.stderr
+    assert (
+        json.loads((current / "collection.json").read_text())["title"] == "Nine Museums"
+    )
+    assert (current / "embeddings" / "index_info.json").exists()
+    assert (current / "ingest_complete").exists(), "the machine must not index again"
+    assert json.loads((current / "settings.json").read_text()) == {"max_upload_mb": 20}
+    kept = [p for p in current.parent.iterdir() if p.name.startswith(".demo.previous-")]
+    assert len(kept) == 1 and (kept[0] / "embeddings" / "embeddings.pt").exists()
+    assert '"example/image:2"' in runner.read_text()
+    assert "pull example/image:2" in log.read_text()
+
+
+def test_bootstrap_import_refuses_a_folder_that_is_not_a_prepared_collection(
+    import_site,
+):
+    run, current, prepared, runner, _ = import_site
+    (prepared / "embeddings" / "metadata.sqlite").unlink()
+    result = run("--from", str(prepared))
+    assert result.returncode != 0
+    assert "not a prepared collection" in result.stderr
+    assert (current / "embeddings" / "embeddings.pt").read_text() == "old index"
+    assert [p.name for p in current.parent.iterdir()] == ["demo"]
+    assert '"example/image:1"' in runner.read_text()
+
+
+def test_bootstrap_import_needs_a_site_to_import_into(import_site):
+    run, _, prepared, _, _ = import_site
+    result = run("--from", str(prepared), name="other")
+    assert result.returncode != 0
+    assert "no collection named other" in result.stderr

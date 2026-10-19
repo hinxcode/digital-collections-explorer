@@ -11,6 +11,7 @@ IMAGE_TAR=""
 DATA_ROOT="/opt/dce"
 NAME=""
 SOURCE=""
+FROM=""
 FETCH_VIA=""
 ANONYMOUS="false"
 LIMIT=""
@@ -28,7 +29,7 @@ CONTAINER_UID=1000
 
 usage() {
     cat <<'EOF'
-Usage: bootstrap.sh <install|status|describe|configure|update|uninstall> --name NAME [options]
+Usage: bootstrap.sh <install|status|describe|configure|update|import|uninstall> --name NAME [options]
 
 install options:
   --source SRC        a folder, s3://bucket/prefix, or a .parquet manifest (required)
@@ -55,6 +56,11 @@ configure options:
 update options:
   --image IMAGE       switch the site to this image. The index is kept.
 
+import options:
+  --from SRC          a collection prepared elsewhere: a folder, or s3://bucket/prefix
+                      holding one. It replaces the site's data; the old data is kept.
+  --image IMAGE       also switch the site to this image
+
 uninstall options:
   --keep-data         stop the site but keep the index and images
 EOF
@@ -71,6 +77,7 @@ parse_args() {
         case "$1" in
         --name) NAME="$2"; shift 2 ;;
         --source) SOURCE="$2"; shift 2 ;;
+        --from) FROM="$2"; shift 2 ;;
         --fetch-via) FETCH_VIA="$2"; shift 2 ;;
         --anonymous) ANONYMOUS="true"; shift ;;
         --limit) LIMIT="$2"; shift 2 ;;
@@ -278,21 +285,92 @@ do_configure() {
 image_in_use() { grep -oE '"[^"]+" (ingest|serve)' "$RUNNER" | head -1 | cut -d'"' -f2; }
 port_in_use() { grep -oE '\-p [0-9]+:8000' "$RUNNER" | grep -oE '[0-9]+' | head -1; }
 
-do_update() {
-    [ "$(id -u)" -eq 0 ] || fail "run this with sudo"
-    [ -f "$RUNNER" ] || fail "no collection named $NAME in $DATA_ROOT"
-    [ "$IMAGE_WAS_GIVEN" = "true" ] || fail "--image is required"
+switch_image() {
     local current
     current="$(image_in_use)"
     fetch_image
-    sed -i "s|\"$current\"|\"$IMAGE\"|g" "$RUNNER"
+    sed -i.previous "s|\"$current\"|\"$IMAGE\"|g" "$RUNNER"
+    rm -f "$RUNNER.previous"
+    PREVIOUS_IMAGE="$current"
+}
+
+restart_site() {
     if has_systemd; then
         systemctl restart "$SERVICE"
     else
         docker rm -f "$SERVICE" >/dev/null 2>&1 || true
         nohup "$RUNNER" >"$COLLECTION_DIR/runner.log" 2>&1 &
     fi
-    say "Switched $NAME from $current to $IMAGE. The index was kept."
+}
+
+do_update() {
+    [ "$(id -u)" -eq 0 ] || fail "run this with sudo"
+    [ -f "$RUNNER" ] || fail "no collection named $NAME in $DATA_ROOT"
+    [ "$IMAGE_WAS_GIVEN" = "true" ] || fail "--image is required"
+    switch_image
+    restart_site
+    say "Switched $NAME from $PREVIOUS_IMAGE to $IMAGE. The index was kept."
+}
+
+machine_region() {
+    local token
+    token="$(curl -fsS -m 2 -X PUT http://169.254.169.254/latest/api/token \
+        -H "X-aws-ec2-metadata-token-ttl-seconds: 60" 2>/dev/null)" || return 0
+    curl -fsS -m 2 -H "X-aws-ec2-metadata-token: $token" \
+        http://169.254.169.254/latest/meta-data/placement/region 2>/dev/null || true
+}
+
+copy_prepared() {
+    local incoming="$1"
+    case "$FROM" in
+    s3://*)
+        command -v aws >/dev/null 2>&1 || fail "the AWS CLI is needed to copy from $FROM"
+        export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-$(machine_region)}"
+        local needed available
+        needed="$(aws s3 ls "${FROM%/}/" --recursive --summarize | awk '/Total Size/ {print $3}')" ||
+            fail "this machine cannot read $FROM. Allow it with deploy.sh --source-bucket"
+        available="$(df -P -k "$DATA_ROOT" | awk 'NR == 2 {print $4 * 1024}')"
+        [ "${needed:-0}" -lt "${available:-0}" ] ||
+            fail "$FROM needs $needed bytes but only $available are free in $DATA_ROOT"
+        say "Copying $FROM ($needed bytes)"
+        aws s3 sync "${FROM%/}/" "$incoming" --only-show-errors
+        ;;
+    *)
+        [ -d "$FROM" ] || fail "folder not found: $FROM"
+        say "Copying $FROM"
+        cp -a "$FROM/." "$incoming/"
+        ;;
+    esac
+}
+
+do_import() {
+    [ -n "$FROM" ] || fail "--from is required"
+    [ -f "$RUNNER" ] || fail "no collection named $NAME in $DATA_ROOT"
+    [ -w "$DATA_ROOT/collections" ] || fail "run this with sudo"
+    local incoming="$DATA_ROOT/collections/.$NAME.incoming"
+    local previous
+    previous="$DATA_ROOT/collections/.$NAME.previous-$(date +%Y%m%d%H%M%S)"
+    rm -rf "$incoming"
+    mkdir -p "$incoming"
+    copy_prepared "$incoming" || { rm -rf "$incoming"; fail "could not copy $FROM"; }
+    if [ ! -f "$incoming/embeddings/index_info.json" ] ||
+        [ ! -f "$incoming/embeddings/metadata.sqlite" ]; then
+        rm -rf "$incoming"
+        fail "$FROM is not a prepared collection: it needs embeddings/index_info.json and embeddings/metadata.sqlite"
+    fi
+    if [ -f "$COLLECTION_DIR/settings.json" ]; then
+        cp "$COLLECTION_DIR/settings.json" "$incoming/settings.json"
+    fi
+    touch "$incoming/ingest_complete"
+    if [ "$(id -u)" -eq 0 ]; then
+        chown -R "$CONTAINER_UID:$CONTAINER_UID" "$incoming"
+    fi
+    [ "$IMAGE_WAS_GIVEN" = "true" ] && switch_image
+    mv "$COLLECTION_DIR" "$previous"
+    mv "$incoming" "$COLLECTION_DIR"
+    restart_site
+    say "$NAME now serves the collection from $FROM, with the same limits as before."
+    say "The previous data is kept in $previous. Delete it once the site works."
 }
 
 do_uninstall() {
@@ -319,6 +397,7 @@ status) do_status ;;
 describe) do_describe ;;
 configure) do_configure ;;
 update) do_update ;;
+import) do_import ;;
 uninstall) do_uninstall ;;
 *) usage; exit 1 ;;
 esac

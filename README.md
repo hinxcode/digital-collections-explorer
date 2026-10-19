@@ -324,6 +324,21 @@ To move a deployed site to a newer version without indexing again:
 deploy/aws/update.sh my-collection --image ghcr.io/hinxcode/digital-collections-explorer:next
 ```
 
+A collection prepared by your own pipeline, such as one split into groups (see above),
+needs no indexing on the machine at all. Copy the folder to a bucket in the machine's
+region, let the machine read that bucket, and import it. The site keeps serving its
+current data until the copy is complete, keeps its limits, and keeps the old data in a
+folder next to the new one until you delete it.
+
+```bash
+aws s3 sync my-collection s3://my-bucket/my-collection
+deploy/aws/deploy.sh my-collection --source-bucket my-bucket
+deploy/aws/import.sh my-collection --from s3://my-bucket/my-collection
+```
+
+On any other machine, `sudo deploy/bootstrap.sh import --name my-collection --from
+/path/to/my-collection` does the same from a local folder.
+
 The images must already be reachable from the cloud (an `s3://` or `https://` address).
 There is no SSH: administrators connect through AWS Session Manager. Pass `--budget` and
 `--email` to be warned when the monthly bill passes an amount you choose.
