@@ -183,10 +183,13 @@ class HybridSearch:
             visual = self.collection.ranked_objects(scores, depth, groups)
 
         keyword: List[str] = []
+        by_group: Dict[str, int] = {}
         empty = None
         if keyword_weight > 0 and index is not None and plan.expression:
             hits = index.search(plan.expression, -1)
-            keyword = self.collection.objects_among([r for r, _ in hits], groups)
+            everywhere = self.collection.objects_among([r for r, _ in hits])
+            by_group = self.collection.group_counts(everywhere)
+            keyword = self.collection.objects_among(everywhere, groups)
             if not keyword:
                 empty = empty_reason(plan, index)
 
@@ -233,7 +236,11 @@ class HybridSearch:
                 "text": plan.text,
                 "correction": plan.correction,
                 "weights": {"visual": visual_weight, "keyword": keyword_weight},
-                "keyword": {"records": len(keyword), "empty": empty},
+                "keyword": {
+                    "records": len(keyword),
+                    "groups": by_group,
+                    "empty": empty,
+                },
                 "message": route_message(plan, mode),
             },
         }

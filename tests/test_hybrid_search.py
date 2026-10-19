@@ -168,6 +168,9 @@ def test_the_group_filter_applies_to_catalog_matches(hybrid):
     found = run(hybrid, "quilt", mode="keyword", groups=["west"])
     assert found["results"] == []
     assert found["search"]["keyword"]["empty"]["kind"] == "outside_groups"
+    assert found["search"]["keyword"]["groups"] == {
+        "east": 2
+    }, "counts ignore the filter"
 
 
 @pytest.mark.parametrize(
