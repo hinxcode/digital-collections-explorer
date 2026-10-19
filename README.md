@@ -193,10 +193,13 @@ my-collection/
   thumbnails/  processed/   the image files that items point to, relative to my-collection
 ```
 
-Each entry in `models` has a `key` (its folder under `vectors/`), a `name` and its
-`dimensions`. The site uses the vectors of the model it is configured with and refuses
-to start if the index holds none from it. Images of the same record are shown as one
-object, and the record's `source_url` is the link back. `original` may be a web
+Each entry in `models` has a `key` (its folder under `vectors/`), a `type` (`clip`,
+`siglip` or `siglip2`), a `name`, a `revision` and its `dimensions`. The site searches
+with the model named by `default_model`, loading the recorded revision, so queries
+and stored vectors come from the same weights. Set `DCE_MODEL` to the key or name of
+another of its models to search with that one; the site refuses to start if the index
+holds no vectors from the model it would use. Images of the same record are shown as
+one object, and the record's `source_url` is the link back. `original` may be a web
 address, in which case `/static/<id>` sends the visitor there.
 
 Searches, samples and similar images take `groups=nmah,saam`; leave it out to cover
@@ -352,6 +355,22 @@ English queries, and it stays usable for queries in other languages, where CLIP 
 fails. Search works best in English. It indexes about three times slower than CLIP and
 its index is about 1.5 times larger.
 
+### Using SigLIP 2
+
+[SigLIP 2](https://arxiv.org/abs/2502.14786) is the second version of SigLIP. It needs
+`transformers` 4.50 or later. Queries are lowercased and padded to 64 tokens, the way
+the model was trained.
+
+```json
+{
+  "model_config": {
+    "model_type": "siglip2",
+    "model_name": "google/siglip2-base-patch16-224",
+    "device": "mps"
+  }
+}
+```
+
 ### Using CLIP
 
 ```json
@@ -363,6 +382,25 @@ its index is about 1.5 times larger.
   }
 }
 ```
+
+### Pinning the model version
+
+Any of the models above can take a `model_revision`: the commit of the model on Hugging
+Face. The index and the searches then keep using the same weights, even after the
+model is updated there.
+
+```json
+{
+  "model_config": {
+    "model_type": "siglip2",
+    "model_name": "google/siglip2-base-patch16-224",
+    "model_revision": "75de2d55ec2d0b4efc50b3e9ad70dba96a7b2fa2"
+  }
+}
+```
+
+A collection split into groups records the models it holds and their revisions in
+`index_info.json`, so it needs none of this: see below.
 
 ### Changing the model
 

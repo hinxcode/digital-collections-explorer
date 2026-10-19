@@ -21,6 +21,7 @@ class TestEmbeddingServiceFactory:
         mock_settings.model_type = "clip"
         mock_settings.model_name = "openai/clip-vit-base-patch32"
         mock_settings.device = "cpu"
+        mock_settings.model_revision = None
 
         mock_instance = MagicMock(spec=CLIPService)
         mock_clip_class.return_value = mock_instance
@@ -28,7 +29,7 @@ class TestEmbeddingServiceFactory:
         service = create_embedding_service()
 
         mock_clip_class.assert_called_once_with(
-            model_name="openai/clip-vit-base-patch32", device="cpu"
+            model_name="openai/clip-vit-base-patch32", device="cpu", revision=None
         )
         assert service == mock_instance
 
@@ -39,6 +40,7 @@ class TestEmbeddingServiceFactory:
         mock_settings.model_type = "siglip"
         mock_settings.model_name = "google/siglip-base-patch16-224"
         mock_settings.device = "mps"
+        mock_settings.model_revision = None
 
         mock_instance = MagicMock(spec=SiglipService)
         mock_siglip_class.return_value = mock_instance
@@ -46,9 +48,29 @@ class TestEmbeddingServiceFactory:
         service = create_embedding_service()
 
         mock_siglip_class.assert_called_once_with(
-            model_name="google/siglip-base-patch16-224", device="mps"
+            model_name="google/siglip-base-patch16-224", device="mps", revision=None
         )
         assert service == mock_instance
+
+    @patch("src.backend.services.embedding_service_factory.Siglip2Service")
+    @patch("src.backend.services.embedding_service_factory.settings")
+    def test_create_siglip2_service_at_a_pinned_revision(
+        self, mock_settings, mock_siglip2_class
+    ):
+        """Test creating a SigLIP 2 service that loads the recorded revision"""
+        mock_settings.model_type = "siglip2"
+        mock_settings.model_name = "google/siglip2-base-patch16-224"
+        mock_settings.device = "cpu"
+        mock_settings.model_revision = "75de2d55ec2d"
+
+        service = create_embedding_service()
+
+        mock_siglip2_class.assert_called_once_with(
+            model_name="google/siglip2-base-patch16-224",
+            device="cpu",
+            revision="75de2d55ec2d",
+        )
+        assert service == mock_siglip2_class.return_value
 
     @patch("src.backend.services.embedding_service_factory.settings")
     def test_create_invalid_model_type(self, mock_settings):

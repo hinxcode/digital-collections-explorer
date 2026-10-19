@@ -54,3 +54,17 @@ def test_choosing_clip_without_a_name_gets_the_clip_default(tmp_path):
 
     loaded = load_config(write_config(tmp_path, {"model_type": "clip"}))
     assert loaded.model_name == CLIP
+
+
+def test_a_revision_in_config_json_is_read(tmp_path):
+    from src.backend.core.config import load_config
+
+    loaded = load_config(write_config(tmp_path, {"model_revision": "abc123"}))
+    assert loaded.model_revision == "abc123"
+
+
+def test_choosing_siglip2_without_a_name_gets_the_siglip2_default(tmp_path):
+    from src.backend.core.config import load_config
+
+    loaded = load_config(write_config(tmp_path, {"model_type": "siglip2"}))
+    assert loaded.model_name == "google/siglip2-base-patch16-224"

@@ -20,8 +20,12 @@ class CLIPService(BaseEmbeddingService):
         """Load CLIP model and processor"""
         logger.info(f"Loading CLIP model: {self.model_name}")
         try:
-            self.model = CLIPModel.from_pretrained(self.model_name).to(self.device)
-            self.processor = CLIPProcessor.from_pretrained(self.model_name)
+            self.model = CLIPModel.from_pretrained(
+                self.model_name, revision=self.revision
+            ).to(self.device)
+            self.processor = CLIPProcessor.from_pretrained(
+                self.model_name, revision=self.revision
+            )
             self.model.eval()
             logger.info(f"CLIP model loaded successfully on {self.device}")
         except Exception as e:
