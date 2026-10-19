@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 
 from src.backend.core.config import settings
 from src.backend.services.embedding_service import embedding_service
@@ -86,6 +86,9 @@ async def get_original_document(id: str):
         raise HTTPException(
             status_code=404, detail="Original file path not found in document metadata"
         )
+
+    if path_str.startswith(("http://", "https://")):
+        return RedirectResponse(path_str)
 
     path = resolve_path(path_str)
 

@@ -21,7 +21,12 @@ from .core.config import settings
 from .services import site_pages
 from .services.collection_service import DEFAULT_COLLECTION, collection_service
 from .services.embedding_service import embedding_service
-from .services.index_info import describe_mismatch
+from .services.index_info import (
+    describe_mismatch,
+    grouped_model,
+    is_grouped,
+    read_index_info,
+)
 from .services.limits import refuse_oversized_upload
 
 logging.basicConfig(
@@ -33,6 +38,11 @@ logger = logging.getLogger(__name__)
 
 def index_problem():
     """Return why the loaded index cannot be searched with the configured model"""
+    info = read_index_info(embedding_service.embeddings_dir)
+    if is_grouped(info) and grouped_model(info, settings.model_name) is None:
+        return describe_mismatch(
+            embedding_service.embeddings_dir, None, settings.model_name, None
+        )
     embedding_service.load_embeddings()
     if not embedding_service.is_loaded:
         return None

@@ -1,5 +1,6 @@
 import logging
 from io import BytesIO
+from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.concurrency import run_in_threadpool
@@ -15,6 +16,7 @@ from ...services.limits import (
     read_upload,
     search_queue,
 )
+from ..groups import GROUPS_DESCRIPTION, checked_groups
 
 model_service = create_embedding_service()
 
@@ -28,7 +30,7 @@ router = APIRouter(
 )
 
 
-def ranked_results(embedding, limit, page, group_by_object):
+def ranked_results(embedding, limit, page, group_by_object, groups=None):
     if not embedding_service.is_loaded:
         embedding_service.load_embeddings()
     scores = embedding_service.similarity_scores(embedding)
@@ -38,6 +40,7 @@ def ranked_results(embedding, limit, page, group_by_object):
         (page - 1) * limit,
         group_by_object,
         score_transform=model_service.transform_score,
+        groups=groups,
     )
     return SearchResponse(results=[SearchResult(**result) for result in raw_results])
 
@@ -73,12 +76,14 @@ async def search_by_text(
     group_by_object: bool = Query(
         True, description="Show each object once, however many images it has"
     ),
+    groups: Optional[str] = Query(None, description=GROUPS_DESCRIPTION),
 ):
     """Search for similar content using text query."""
+    wanted = checked_groups(groups)
 
     def search():
         embedding = model_service.encode_text(query)
-        return ranked_results(embedding, limit, page, group_by_object)
+        return ranked_results(embedding, limit, page, group_by_object, wanted)
 
     async with search_queue.turn():
         try:
@@ -98,13 +103,15 @@ async def search_by_image(
     group_by_object: bool = Form(
         True, description="Show each object once, however many images it has"
     ),
+    groups: Optional[str] = Form(None, description=GROUPS_DESCRIPTION),
 ):
     """Search for similar content using an uploaded image."""
+    wanted = checked_groups(groups)
     image_data = await read_upload(image)
 
     def search():
         embedding = model_service.encode_image(open_upload(image_data))
-        return ranked_results(embedding, limit, page, group_by_object)
+        return ranked_results(embedding, limit, page, group_by_object, wanted)
 
     async with search_queue.turn():
         try:
