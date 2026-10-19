@@ -289,9 +289,9 @@ deploy/aws/deploy.sh my-collection --instance-type t3.medium
 The script never lets an update replace the machine, which would delete the index: it
 keeps the machine's operating system image fixed and refuses to change the disk size.
 It also refuses to change the options that only matter when a machine is first created
-(`--source`, `--fetch-via`, `--anonymous`, `--limit`, `--image`, `--bootstrap-url`),
-because that would restart the machine and change nothing. To switch a running site to
-another version, use `update.sh` below.
+(`--source`, `--from`, `--fetch-via`, `--anonymous`, `--limit`, `--image`,
+`--bootstrap-url`), because that would restart the machine and change nothing. To switch
+a running site to another version, use `update.sh` below.
 
 `status.sh` reports how the run went and what it cost: when indexing started and
 finished, how long it took, images per second, how much was read from the source, the
@@ -323,6 +323,31 @@ To move a deployed site to a newer version without indexing again:
 ```bash
 deploy/aws/update.sh my-collection --image ghcr.io/hinxcode/digital-collections-explorer:next
 ```
+
+A collection prepared by your own pipeline, such as one split into groups (see above),
+needs no indexing on the machine at all. Copy the folder to a bucket in the region where
+the machine will run. A new deployment then starts from it with `--from` in place of
+`--source`: the machine is allowed to read that bucket, copies the folder, and opens the
+site.
+
+```bash
+aws s3 sync my-collection s3://my-bucket/my-collection
+deploy/aws/deploy.sh my-collection --from s3://my-bucket/my-collection
+```
+
+To replace the data of a site that is already running, let its machine read the bucket
+and import the folder. The site keeps serving its current data until the copy is
+complete, keeps its limits, and keeps the old data in a folder next to the new one until
+you delete it. Either way, `status.sh` names the folder the site was copied from.
+
+```bash
+deploy/aws/deploy.sh my-collection --source-bucket my-bucket
+deploy/aws/import.sh my-collection --from s3://my-bucket/my-collection
+```
+
+On any other machine, `sudo deploy/bootstrap.sh install --name my-collection --from
+/path/to/my-collection` starts a site from a local folder, and `import` with the same
+options replaces the data of one that is running.
 
 The images must already be reachable from the cloud (an `s3://` or `https://` address).
 There is no SSH: administrators connect through AWS Session Manager. Pass `--budget` and
