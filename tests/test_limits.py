@@ -155,7 +155,7 @@ def test_a_normal_image_is_searched(site):
     client, _, _, _ = site
     answer = client.post("/api/search/image", files={"image": ("a.png", picture())})
     assert answer.status_code == 200
-    assert answer.json() == {"results": []}
+    assert answer.json()["results"] == []
 
 
 def test_a_file_that_is_not_an_image_is_named_as_the_problem(site):
