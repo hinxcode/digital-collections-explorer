@@ -11,6 +11,7 @@ const SearchResults = React.memo(({
   setCurrentPage,
   hasMore,
   heading,
+  groupLabels,
 }) => {
   if (isLoading) {
     return (
@@ -45,7 +46,7 @@ const SearchResults = React.memo(({
           model, best matches first.
         </p>
       </div>
-      <ImageGrid items={items} />
+      <ImageGrid items={items} groupLabels={groupLabels} />
       <Pagination
         currentPage={currentPage}
         setCurrentPage={setCurrentPage}

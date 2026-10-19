@@ -22,6 +22,12 @@ ITEMS_QUERY = """
            i.thumbnail, i.processed, i.original, r.title, r.source_url
     FROM items i LEFT JOIN records r ON r.record_id = i.record_id
 """
+FIELDS_QUERY = (
+    "SELECT label, value FROM record_fields WHERE record_id = ? ORDER BY position"
+)
+FACETS_QUERY = (
+    "SELECT facet, value FROM record_facets WHERE record_id = ? ORDER BY facet, value"
+)
 
 
 @dataclass
@@ -137,3 +143,28 @@ def read_grouped_metadata(path: Path) -> Dict[str, Dict[str, Any]]:
         }
         metadata[item_id] = {k: v for k, v in described.items() if v is not None}
     return metadata
+
+
+def read_record_details(path: Path, record_id: str) -> Dict[str, Any]:
+    """The catalog fields and facets of one record, when metadata.sqlite keeps them"""
+    fields: List[Dict[str, str]] = []
+    facets: Dict[str, List[str]] = {}
+    con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    try:
+        tables = {
+            name
+            for (name,) in con.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
+        if "record_fields" in tables:
+            fields = [
+                {"label": label, "value": value}
+                for label, value in con.execute(FIELDS_QUERY, (record_id,))
+            ]
+        if "record_facets" in tables:
+            for facet, value in con.execute(FACETS_QUERY, (record_id,)):
+                facets.setdefault(facet, []).append(value)
+    finally:
+        con.close()
+    return {"fields": fields, "facets": facets}

@@ -68,6 +68,13 @@
   transition: opacity 0.2s ease;
 }
 
+.image-grid-group {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.72rem;
+  color: #d0b49f;
+}
+
 .image-grid-cell a:hover .image-grid-caption,
 .image-grid-cell a:focus-visible .image-grid-caption {
   opacity: 1;

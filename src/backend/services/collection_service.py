@@ -11,6 +11,7 @@ import torch
 
 from ..core.config import settings
 from .catalog_fields import object_id_from, source_url_from
+from .collection_store import METADATA_DB, read_record_details
 from .embedding_service import EmbeddingService, embedding_service
 from .index_info import is_grouped, read_index_info
 
@@ -191,7 +192,7 @@ class CollectionService:
         return len(self._objects_in(self._numbers(groups)))
 
     def item(self, item_id: str) -> Optional[Dict[str, Any]]:
-        """Return one image together with every photo of its object, itself included"""
+        """Return one image with every photo of its object and, if kept, its record"""
         self._ensure_index()
         index = self.position.get(item_id)
         if index is None:
@@ -200,6 +201,11 @@ class CollectionService:
         described["photos"] = [
             self.present(member) for member in self.members[self.object_ids[index]]
         ]
+        if self.groups:
+            described["record"] = read_record_details(
+                Path(self.embeddings.embeddings_dir) / METADATA_DB,
+                described["object_id"],
+            )
         return described
 
     def similar(

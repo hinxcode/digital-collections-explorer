@@ -24,17 +24,21 @@ const PhotosIcon = () => (
   </svg>
 );
 
-const ImageGrid = React.memo(({ items, size = 'regular' }) => (
+const ImageGrid = React.memo(({ items, size = 'regular', groupLabels = {} }) => (
   <ul className={`image-grid image-grid-${size}`}>
     {items.map((item) => {
       const title = titleOf(item);
       const photoCount = item.image_count || 1;
+      const groupLabel = groupLabels[item.metadata?.group];
 
       return (
         <li key={item.id} className="image-grid-cell" style={{ '--ratio': aspectRatioOf(item) }}>
           <a href={itemHref(item.id)} aria-label={title || 'Uncataloged image'}>
             <img src={imageUrl(item.id, 'thumbnail')} alt={title || ''} loading="lazy" />
-            <span className="image-grid-caption">{title || 'Uncataloged image'}</span>
+            <span className="image-grid-caption">
+              {title || 'Uncataloged image'}
+              {groupLabel && <span className="image-grid-group">{groupLabel}</span>}
+            </span>
             {photoCount > 1 && (
               <span className="image-grid-badge">
                 <PhotosIcon />

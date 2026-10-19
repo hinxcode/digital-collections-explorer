@@ -42,6 +42,17 @@ function ItemDetail({ id, collection, canGoBack }) {
   const [zoomIsOpen, setZoomIsOpen] = useState(false);
 
   const photos = useMemo(() => object?.photos || [], [object]);
+  const recordFields = useMemo(() => {
+    const byLabel = new Map();
+    (object?.record?.fields || []).forEach(({ label, value }) => {
+      byLabel.set(label, [...(byLabel.get(label) || []), value]);
+    });
+    return [...byLabel.entries()];
+  }, [object]);
+  const groupLabels = useMemo(
+    () => Object.fromEntries((collection?.groups || []).map((group) => [group.id, group.label])),
+    [collection],
+  );
   const currentIndex = Math.max(0, photos.findIndex((photo) => photo.id === currentId));
   const current = photos[currentIndex];
 
@@ -130,6 +141,7 @@ function ItemDetail({ id, collection, canGoBack }) {
   const sourceUrl = metadata.source_url;
   const sourceName = collection?.source_name || (sourceUrl && hostnameOf(sourceUrl));
   const license = collection?.license;
+  const groupLabel = groupLabels[metadata.group];
   const hasSeveralPhotos = photos.length > 1;
   const aspectRatio = metadata.width && metadata.height
     ? metadata.width / metadata.height
@@ -214,6 +226,7 @@ function ItemDetail({ id, collection, canGoBack }) {
 
         <div className="item-detail-facts">
           <h2>{title || 'Uncataloged image'}</h2>
+          {groupLabel && <p className="item-detail-group">{groupLabel}</p>}
 
           {!title && (
             <p className="item-detail-note">
@@ -227,6 +240,19 @@ function ItemDetail({ id, collection, canGoBack }) {
               <span>View the full record at {sourceName}</span>
               <ExternalLinkIcon />
             </a>
+          )}
+
+          {recordFields.length > 0 && (
+            <dl className="item-detail-record">
+              {recordFields.map(([label, values]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  {values.map((value, index) => (
+                    <dd key={`${label}-${index}`}>{value}</dd>
+                  ))}
+                </div>
+              ))}
+            </dl>
           )}
 
           <dl>
@@ -264,7 +290,7 @@ function ItemDetail({ id, collection, canGoBack }) {
             Chosen by an AI model from how the pictures look, not from the catalog.
             Follow any of them to keep wandering.
           </p>
-          <ImageGrid items={similar} />
+          <ImageGrid items={similar} groupLabels={groupLabels} />
         </section>
       )}
 

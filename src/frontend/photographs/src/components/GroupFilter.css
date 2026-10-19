@@ -1,0 +1,145 @@
+.group-filter {
+  position: relative;
+  align-self: flex-start;
+  margin-left: 1.3rem;
+  font-size: 0.9rem;
+}
+
+.group-filter summary {
+  display: inline-flex;
+  gap: 0.45rem;
+  align-items: center;
+  padding: 0.35rem 0.85rem;
+  color: #d0b49f;
+  list-style: none;
+  border: 1px solid #4a4038;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.group-filter summary::-webkit-details-marker {
+  display: none;
+}
+
+.group-filter summary::after {
+  content: '';
+  width: 0.4rem;
+  height: 0.4rem;
+  margin: -0.2rem 0 0 0.1rem;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.group-filter[open] summary::after {
+  margin-top: 0.2rem;
+  transform: rotate(-135deg);
+}
+
+.group-filter summary:hover,
+.group-filter summary:focus-visible {
+  border-color: #8b5a2b;
+}
+
+.group-filter-name {
+  color: #9a9a9a;
+}
+
+.group-filter-summary {
+  color: #f8f5f0;
+}
+
+.group-filter-panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  width: max-content;
+  max-width: min(30rem, 90vw);
+  padding: 0.6rem 0.4rem 0.7rem;
+  text-align: left;
+  background-color: #262626;
+  border: 1px solid #3a3a3a;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.group-filter-panel ul {
+  margin: 0 0 0.4rem;
+  padding: 0;
+  list-style: none;
+}
+
+.group-filter-panel li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+}
+
+.group-filter-panel li:hover {
+  background-color: #303030;
+}
+
+.group-filter-panel label {
+  display: flex;
+  flex: 1;
+  gap: 0.55rem;
+  align-items: center;
+  padding: 0.3rem 0;
+  color: #e6e1da;
+  cursor: pointer;
+}
+
+.group-filter-panel input {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  accent-color: #8b5a2b;
+}
+
+.group-filter-panel button {
+  padding: 0.2rem 0.4rem;
+  font-size: 0.8rem;
+  color: #d0b49f;
+  background: none;
+}
+
+.group-filter-panel li button {
+  visibility: hidden;
+}
+
+.group-filter-panel li:hover button,
+.group-filter-panel li button:focus-visible {
+  visibility: visible;
+}
+
+.group-filter-panel button:hover {
+  text-decoration: underline;
+  background: none;
+}
+
+.group-filter-all {
+  margin-left: 0.5rem;
+}
+
+.group-filter-panel button:disabled {
+  color: #6a6a6a;
+  text-decoration: none;
+  cursor: default;
+}
+
+@media (hover: none) {
+  .group-filter-panel li button {
+    visibility: visible;
+  }
+}
+
+@media (max-width: 600px) {
+  .group-filter {
+    margin-left: 0;
+  }
+}

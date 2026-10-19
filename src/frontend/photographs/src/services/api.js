@@ -3,6 +3,10 @@ const API_URL = import.meta.env.API_BASE_URL || sitePath();
 
 const VISITOR_FACING_STATUSES = [400, 411, 413, 429, 503];
 
+const groupsParam = (groups) => (
+  groups && groups.length > 0 ? `&groups=${encodeURIComponent(groups.join(','))}` : ''
+);
+
 const failure = async (response) => {
   const error = new Error(`API error: ${response.status}`);
   if (VISITOR_FACING_STATUSES.includes(response.status)) {
@@ -21,10 +25,10 @@ const failure = async (response) => {
  * @param {number} page - Page number for pagination (default: 1)
  * @returns {Promise<Array>} - Array of search results
  */
-export const searchByText = async (query, limit = 50, page = 1) => {
+export const searchByText = async (query, limit = 50, page = 1, groups = []) => {
   try {
     const pageParam = Math.max(1, parseInt(page) || 1);
-    const response = await fetch(`${API_URL}/api/search/text?query=${encodeURIComponent(query)}&limit=${limit}&page=${pageParam}`);
+    const response = await fetch(`${API_URL}/api/search/text?query=${encodeURIComponent(query)}&limit=${limit}&page=${pageParam}${groupsParam(groups)}`);
     
     if (!response.ok) {
       throw await failure(response);
@@ -45,12 +49,15 @@ export const searchByText = async (query, limit = 50, page = 1) => {
  * @param {number} page - Page number for pagination
  * @returns {Promise<Array>} - Array of search results
  */
-export const searchByImage = async (image, limit = 50, page = 1) => {
+export const searchByImage = async (image, limit = 50, page = 1, groups = []) => {
   try {
     const formData = new FormData();
     formData.append('image', image);
     formData.append('limit', limit);
     formData.append('page', page);
+    if (groups.length > 0) {
+      formData.append('groups', groups.join(','));
+    }
 
     const response = await fetch(`${API_URL}/api/search/image`, {
       method: 'POST',
@@ -122,8 +129,8 @@ export const getCollection = () => getJson('/api/collection');
  * @param {number} offset - Continue the same order further on, without repeats
  * @returns {Promise<{results: Array, has_more: boolean}>}
  */
-export const getSample = (limit, seed, offset = 0) => (
-  getJson(`/api/items/sample?limit=${limit}&seed=${seed}&offset=${offset}`)
+export const getSample = (limit, seed, offset = 0, groups = []) => (
+  getJson(`/api/items/sample?limit=${limit}&seed=${seed}&offset=${offset}${groupsParam(groups)}`)
 );
 
 /**
