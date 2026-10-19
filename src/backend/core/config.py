@@ -9,6 +9,7 @@ from pydantic_settings import BaseSettings
 class ModelType(str, Enum):
     CLIP = "clip"
     SIGLIP = "siglip"
+    SIGLIP2 = "siglip2"
 
 
 class DeviceType(str, Enum):
@@ -21,6 +22,7 @@ DEFAULT_MODEL_TYPE = "siglip"
 DEFAULT_MODEL_NAMES = {
     "clip": "openai/clip-vit-base-patch32",
     "siglip": "google/siglip-base-patch16-224",
+    "siglip2": "google/siglip2-base-patch16-224",
 }
 
 
@@ -38,6 +40,7 @@ class Settings(BaseSettings):
     # Embedding model default settings
     model_type: ModelType = ModelType.SIGLIP
     model_name: str = "google/siglip-base-patch16-224"
+    model_revision: str | None = None
     device: DeviceType = DeviceType.CUDA
     batch_size: int = 32
 
@@ -95,6 +98,7 @@ def load_config(config_path: Path | None = None):
             or legacy_clip_model
             or DEFAULT_MODEL_NAMES.get(model_type, DEFAULT_MODEL_NAMES["siglip"])
         )
+        settings_dict["model_revision"] = model_config.get("model_revision")
         settings_dict["device"] = model_config.get("device", "cuda")
         settings_dict["batch_size"] = model_config.get("batch_size", 32)
 

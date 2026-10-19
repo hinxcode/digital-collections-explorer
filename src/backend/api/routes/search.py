@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from fastapi.concurrency import run_in_threadpool
 from PIL import Image
 
+from ...core.config import settings
 from ...models.schemas import SearchResponse, SearchResult
 from ...services.collection_service import collection_service
 from ...services.embedding_service import embedding_service
@@ -16,8 +17,10 @@ from ...services.limits import (
     read_upload,
     search_queue,
 )
+from ...services.model_choice import choose_model
 from ..groups import GROUPS_DESCRIPTION, checked_groups
 
+choose_model(settings)
 model_service = create_embedding_service()
 
 MAX_QUERY_CHARACTERS = 500
