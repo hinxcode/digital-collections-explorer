@@ -37,7 +37,7 @@ KIND_LABELS = {
 ROUTE_MESSAGES = {
     "identifier": "Looked up as a catalog number",
     "field": "Searching only the {field} field of the catalog",
-    "phrase": "Matching the exact phrase in the catalog first",
+    "phrase": "Matching the exact phrase in the catalog",
     "name": "Treated as a name query; matching the catalog first",
     "date": "Treated as a date; matching catalog dates first",
     "place": "Treated as a place; combining the catalog with appearance",

@@ -234,8 +234,8 @@ With `mode=auto`, the default, the site reads the query first and weighs the cha
 
 | Query | Read as | Visual, keyword |
 |---|---|---|
-| `"exact phrase"` | phrase | 0.3, 1 |
-| `name:Muybridge`, also `title:`, `place:`, `topic:`, `type:`, `date:`, `id:` | one field | 0.3, 1 |
+| `"exact phrase"`, with straight or curly quotation marks | phrase | 0, 1 |
+| `name:Muybridge`, also `title:`, `place:`, `topic:`, `type:`, `date:`, `id:` | one field | 0, 1 |
 | `NPG.87.109`, in a pattern the collection's own catalog numbers follow | catalog number | 0, 1 |
 | `1885`, `1880s` | date | 0.3, 1 |
 | a name from the catalog, such as `mathew brady` | name | 0.3, 1 |
