@@ -2,9 +2,11 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Lightbox from 'yet-another-react-lightbox';
 import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import 'yet-another-react-lightbox/styles.css';
+import CatalogText from './CatalogText';
 import ImageGrid from './ImageGrid';
 import { itemHref } from '../hooks/useHashRoute';
 import { getItem, getSimilar, imageUrl } from '../services/api';
+import { plainText } from '../services/catalogText';
 import { titleOf } from '../services/items';
 import './ItemDetail.css';
 
@@ -138,6 +140,7 @@ function ItemDetail({ id, collection, canGoBack }) {
 
   const { metadata } = current;
   const title = titleOf(current);
+  const name = plainText(title);
   const sourceUrl = metadata.source_url;
   const sourceName = collection?.source_name || (sourceUrl && hostnameOf(sourceUrl));
   const license = collection?.license;
@@ -171,7 +174,7 @@ function ItemDetail({ id, collection, canGoBack }) {
               onClick={() => setZoomIsOpen(true)}
               aria-label="View larger"
             >
-              <img src={fullImage(current.id)} alt={title || 'Uncataloged image'} />
+              <img src={fullImage(current.id)} alt={name || 'Uncataloged image'} />
             </button>
             {hasSeveralPhotos && (
               <>
@@ -225,7 +228,7 @@ function ItemDetail({ id, collection, canGoBack }) {
         </div>
 
         <div className="item-detail-facts">
-          <h2>{title || 'Uncataloged image'}</h2>
+          <h2>{title ? <CatalogText text={title} /> : 'Uncataloged image'}</h2>
           {groupLabel && <p className="item-detail-group">{groupLabel}</p>}
 
           {!title && (
@@ -248,7 +251,7 @@ function ItemDetail({ id, collection, canGoBack }) {
                 <div key={label}>
                   <dt>{label}</dt>
                   {values.map((value, index) => (
-                    <dd key={`${label}-${index}`}>{value}</dd>
+                    <dd key={`${label}-${index}`}><CatalogText text={value} links /></dd>
                   ))}
                 </div>
               ))}
@@ -298,7 +301,7 @@ function ItemDetail({ id, collection, canGoBack }) {
         open={zoomIsOpen}
         close={() => setZoomIsOpen(false)}
         index={currentIndex}
-        slides={photos.map((photo) => ({ src: fullImage(photo.id), alt: title || '' }))}
+        slides={photos.map((photo) => ({ src: fullImage(photo.id), alt: name || '' }))}
         on={{ view: ({ index }) => photos[index] && showPhoto(photos[index].id) }}
         plugins={[Zoom]}
         carousel={{ finite: true }}

@@ -279,6 +279,18 @@ def test_a_collection_without_catalog_text_has_no_keyword_index(tmp_path, monkey
     assert HybridSearch(loaded_service(tmp_path, monkeypatch)).index is None
 
 
+def test_the_catalog_index_is_read_before_the_first_query(hybrid, monkeypatch):
+    hybrid.warm()
+    monkeypatch.setattr(hybrid.index, "connect", lambda: pytest.fail("read again"))
+    assert plan_query("Mary Smith", hybrid.index).kind == "name"
+    assert plan_query("TE.E388879", hybrid.index).kind == "identifier"
+
+
+def test_warming_a_collection_without_catalog_text_does_nothing(tmp_path, monkeypatch):
+    build_grouped_collection(tmp_path)
+    HybridSearch(loaded_service(tmp_path, monkeypatch)).warm()
+
+
 class FixedModel:
     def encode_text(self, query):
         return encode(query)

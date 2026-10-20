@@ -26,6 +26,8 @@ IMAGE_WAS_GIVEN="false"
 
 # The container runs as this user id, so the data folder must belong to it.
 CONTAINER_UID=1000
+MODEL_VOLUME="dce-models"
+MODEL_CACHE="/app/.cache/huggingface"
 
 usage() {
     cat <<'EOF'
@@ -167,7 +169,7 @@ set -euo pipefail
 if [ ! -f "$COLLECTION_DIR/ingest_complete" ]; then
     docker rm -f $SERVICE-ingest >/dev/null 2>&1 || true
     docker run --rm --name $SERVICE-ingest \\
-        -v "$COLLECTION_DIR:/data" $SOURCE_MOUNT \\
+        -v "$COLLECTION_DIR:/data" -v $MODEL_VOLUME:$MODEL_CACHE $SOURCE_MOUNT \\
         "$IMAGE" ingest $SOURCE_ARG$ingest_flags --json /data/ingest_summary.json
     touch "$COLLECTION_DIR/ingest_complete"
 fi
@@ -175,7 +177,7 @@ fi
 docker rm -f $SERVICE >/dev/null 2>&1 || true
 exec docker run --rm --name $SERVICE \\
     -p $PORT:8000 -e DCE_COLLECTION=$NAME -e DCE_BASE_PATH=$BASE_PATH \\
-    -v "$COLLECTION_DIR:/data" \\
+    -v "$COLLECTION_DIR:/data" -v $MODEL_VOLUME:$MODEL_CACHE \\
     "$IMAGE" serve
 EOF
     chmod +x "$RUNNER"
@@ -316,6 +318,12 @@ switch_image() {
     PREVIOUS_IMAGE="$current"
 }
 
+keep_models() {
+    grep -q "$MODEL_VOLUME:" "$RUNNER" ||
+        sed -i.previous "s|:/data\"|& -v $MODEL_VOLUME:$MODEL_CACHE|" "$RUNNER"
+    rm -f "$RUNNER.previous"
+}
+
 restart_site() {
     if has_systemd; then
         systemctl restart "$SERVICE"
@@ -330,6 +338,7 @@ do_update() {
     [ -f "$RUNNER" ] || fail "no collection named $NAME in $DATA_ROOT"
     [ "$IMAGE_WAS_GIVEN" = "true" ] || fail "--image is required"
     switch_image
+    keep_models
     restart_site
     say "Switched $NAME from $PREVIOUS_IMAGE to $IMAGE. The index was kept."
 }
@@ -395,6 +404,7 @@ do_import() {
     [ "$IMAGE_WAS_GIVEN" = "true" ] && switch_image
     mv "$COLLECTION_DIR" "$previous"
     mv "$STAGED" "$COLLECTION_DIR"
+    keep_models
     restart_site
     say "$NAME now serves the collection from $FROM, with the same limits as before."
     say "The previous data is kept in $previous. Delete it once the site works."
