@@ -1,6 +1,8 @@
 import React from 'react';
+import CatalogText from './CatalogText';
 import { itemHref } from '../hooks/useHashRoute';
 import { imageUrl } from '../services/api';
+import { plainText } from '../services/catalogText';
 import { titleOf } from '../services/items';
 import './ImageGrid.css';
 
@@ -28,16 +30,17 @@ const ImageGrid = React.memo(({ items, size = 'regular', groupLabels = {} }) => 
   <ul className={`image-grid image-grid-${size}`}>
     {items.map((item) => {
       const title = titleOf(item);
+      const name = plainText(title);
       const photoCount = item.image_count || 1;
       const groupLabel = groupLabels[item.metadata?.group];
       const catalogMatch = item.explanation?.split(' · ').find((part) => part.endsWith('matched'));
 
       return (
         <li key={item.id} className="image-grid-cell" style={{ '--ratio': aspectRatioOf(item) }}>
-          <a href={itemHref(item.id)} aria-label={title || 'Uncataloged image'}>
-            <img src={imageUrl(item.id, 'thumbnail')} alt={title || ''} loading="lazy" />
+          <a href={itemHref(item.id)} aria-label={name || 'Uncataloged image'}>
+            <img src={imageUrl(item.id, 'thumbnail')} alt={name || ''} loading="lazy" />
             <span className="image-grid-caption">
-              {title || 'Uncataloged image'}
+              {title ? <CatalogText text={title} /> : 'Uncataloged image'}
               {groupLabel && <span className="image-grid-group">{groupLabel}</span>}
               {item.explanation && <span className="image-grid-why">{item.explanation}</span>}
             </span>

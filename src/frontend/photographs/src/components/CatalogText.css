@@ -1,0 +1,7 @@
+.catalog-text-block {
+  display: block;
+}
+
+.catalog-text-block + .catalog-text-block {
+  margin-top: 0.5em;
+}
