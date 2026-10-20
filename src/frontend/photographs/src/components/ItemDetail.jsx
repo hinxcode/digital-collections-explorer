@@ -11,6 +11,8 @@ import { titleOf } from '../services/items';
 import './ItemDetail.css';
 
 const SIMILAR_COUNT = 24;
+// Fields longer than this many characters open folded, so the rest of the record stays in view.
+const FOLDED_LENGTH = 600;
 
 const fullImage = (id) => imageUrl(id, 'full');
 const thumbnail = (id) => imageUrl(id, 'thumbnail');
@@ -42,6 +44,7 @@ function ItemDetail({ id, collection, canGoBack }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [zoomIsOpen, setZoomIsOpen] = useState(false);
+  const [unfolded, setUnfolded] = useState([]);
 
   const photos = useMemo(() => object?.photos || [], [object]);
   const recordFields = useMemo(() => {
@@ -68,6 +71,7 @@ function ItemDetail({ id, collection, canGoBack }) {
         if (isCurrent) {
           setObject(loaded);
           setCurrentId(id);
+          setUnfolded([]);
         }
       })
       .catch(() => isCurrent && setError('This item could not be found.'))
@@ -196,15 +200,15 @@ function ItemDetail({ id, collection, canGoBack }) {
                 >
                   <Chevron direction="right" />
                 </button>
+                <span className="item-detail-count" aria-hidden="true">
+                  {currentIndex + 1} / {photos.length}
+                </span>
               </>
             )}
           </div>
 
           {hasSeveralPhotos && (
             <div className="item-detail-photos">
-              <p>
-                {photos.length} photos of this object. Showing photo {currentIndex + 1}.
-              </p>
               <ul>
                 {photos.map((photo, index) => (
                   <li key={photo.id}>
@@ -247,14 +251,33 @@ function ItemDetail({ id, collection, canGoBack }) {
 
           {recordFields.length > 0 && (
             <dl className="item-detail-record">
-              {recordFields.map(([label, values]) => (
-                <div key={label}>
-                  <dt>{label}</dt>
-                  {values.map((value, index) => (
-                    <dd key={`${label}-${index}`}><CatalogText text={value} links /></dd>
-                  ))}
-                </div>
-              ))}
+              {recordFields.map(([label, values]) => {
+                const isLong = values.join(' ').length > FOLDED_LENGTH;
+                const isFolded = isLong && !unfolded.includes(label);
+                return (
+                  <div key={label}>
+                    <dt>{label}</dt>
+                    {(isFolded ? values.slice(0, 1) : values).map((value, index) => (
+                      <dd key={`${label}-${index}`} className={isFolded ? 'is-folded' : undefined}>
+                        <CatalogText text={value} links />
+                      </dd>
+                    ))}
+                    {isLong && (
+                      <dd>
+                        <button
+                          type="button"
+                          className="link-button"
+                          onClick={() => setUnfolded(isFolded
+                            ? [...unfolded, label]
+                            : unfolded.filter((other) => other !== label))}
+                        >
+                          {isFolded ? 'Show more' : 'Show less'}
+                        </button>
+                      </dd>
+                    )}
+                  </div>
+                );
+              })}
             </dl>
           )}
 
@@ -289,10 +312,6 @@ function ItemDetail({ id, collection, canGoBack }) {
       {similar.length > 0 && (
         <section>
           <h3>Looks similar</h3>
-          <p className="item-detail-note">
-            Chosen by an AI model from how the pictures look, not from the catalog.
-            Follow any of them to keep wandering.
-          </p>
           <ImageGrid items={similar} groupLabels={groupLabels} />
         </section>
       )}

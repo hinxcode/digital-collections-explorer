@@ -21,7 +21,7 @@ FIELD_LABELS = {
     "title": "Title",
     "names": "Name",
     "identifiers": "Catalog number",
-    "object_types": "Object type",
+    "object_types": "Kind of object",
     "topics": "Subject",
     "places": "Place",
     "dates": "Date",
@@ -77,16 +77,13 @@ def fuse(
 
 
 def explain(ranks: Dict[str, Optional[int]], fields: List[str]) -> str:
-    """Why a result is here, from its ranks and the fields its record matched in"""
-    parts = []
+    """Why a result is here: the fields its record matched in, or else its looks"""
     if fields:
-        labels = list(dict.fromkeys(FIELD_LABELS.get(f, f) for f in fields))
-        parts.append(f"{' and '.join(labels[:2])} matched")
-    elif ranks.get("keyword"):
-        parts.append("Catalog matched")
-    if ranks.get("visual"):
-        parts.append(f"Visual similarity #{ranks['visual']}")
-    return " · ".join(parts)
+        labels = list(dict.fromkeys(FIELD_LABELS.get(f, f).lower() for f in fields))
+        return f"Matches the {' and '.join(labels[:2])}"
+    if ranks.get("keyword"):
+        return "Matches the catalog"
+    return "Looks similar" if ranks.get("visual") else ""
 
 
 def listed(terms: List[str], last: str) -> str:

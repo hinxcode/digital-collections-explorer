@@ -11,10 +11,12 @@
 .mode-toggle-label {
   padding: 0 0.45rem 0 0.6rem;
   color: #9a9a9a;
+  white-space: nowrap;
 }
 
 .mode-toggle button {
   padding: 0.25rem 0.75rem;
+  white-space: nowrap;
   font-size: inherit;
   color: #d0b49f;
   background: none;
@@ -28,4 +30,14 @@
 .mode-toggle button.is-active {
   color: #f8f5f0;
   background-color: #8b5a2b;
+}
+
+.mode-toggle-reading {
+  opacity: 0.8;
+}
+
+@media (max-width: 420px) {
+  .mode-toggle-label {
+    display: none;
+  }
 }

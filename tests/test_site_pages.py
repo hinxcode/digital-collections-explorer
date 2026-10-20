@@ -85,6 +85,7 @@ def test_llms_txt_leaves_out_what_the_collection_does_not_say():
     assert "This site holds" not in text
     assert "License" not in text
     assert "The images come from" not in text
+    assert ">" not in text.splitlines()[2]
 
 
 @pytest.fixture()

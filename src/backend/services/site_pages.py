@@ -62,7 +62,7 @@ def llms_txt(collection: Dict[str, Any], base_path: str = "") -> str:
     """Describe the site to AI assistants in the llms.txt format"""
     title = collection.get("title") or "Digital Collections Explorer"
     description = collection.get("description") or ""
-    lines = [f"# {title}", "", f"> {description}", ""]
+    lines = [f"# {title}", ""] + ([f"> {description}", ""] if description else [])
     counts = []
     if collection.get("images"):
         counts.append(f"{collection['images']:,} images")

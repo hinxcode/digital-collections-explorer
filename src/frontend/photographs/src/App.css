@@ -46,25 +46,25 @@
   font-size: 1.4rem;
 }
 
-.wall-heading,
-.results-heading {
+.wall-heading {
   text-align: left;
   margin-bottom: 1rem;
 }
 
-.wall-heading h2,
-.results-heading h2 {
+.wall-heading h2 {
   margin: 0;
   font-family: 'Kumbh Sans', sans-serif;
   font-size: 1.3rem;
   color: #f8f5f0;
 }
 
-.wall-heading p,
-.results-heading p {
-  margin: 0.3rem 0 0;
-  font-size: 0.88rem;
-  color: #9a9a9a;
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .wall-more {
