@@ -28,6 +28,7 @@ FIELD_NAMES = {
 SYNTAX = re.compile(
     r'(?P<field>[A-Za-z]+):\s*(?P<value>"[^"]*"|\S+)|"(?P<phrase>[^"]*)"'
 )
+CURLY_QUOTES = str.maketrans(dict.fromkeys("“”„‟″＂", '"'))
 YEAR = re.compile(r"^(1[0-9]|20)[0-9]{2}$")
 DECADE = re.compile(r"^(1[0-9]|20)[0-9]0s$")
 WHOLE_QUERY = "whole"
@@ -35,8 +36,8 @@ WHOLE_QUERY = "whole"
 # Visual and keyword channel weights for each kind of query, in that order.
 ROUTE_WEIGHTS = {
     "identifier": (0.0, 1.0),
-    "field": (0.3, 1.0),
-    "phrase": (0.3, 1.0),
+    "field": (0.0, 1.0),
+    "phrase": (0.0, 1.0),
     "name": (0.3, 1.0),
     "date": (0.3, 1.0),
     "place": (1.0, 1.0),
@@ -249,7 +250,7 @@ def plan_query(
     query: str, index: Optional[KeywordIndex], correct_spelling: bool = True
 ) -> QueryPlan:
     """Decide how to search a query: by appearance, by the catalog, or both"""
-    query = query.strip()
+    query = query.strip().translate(CURLY_QUOTES)
     if index is None or not index.available():
         return QueryPlan(query=query, text=query)
 

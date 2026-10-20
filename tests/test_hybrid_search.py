@@ -195,6 +195,22 @@ def test_queries_are_read_by_kind(hybrid, query, kind):
     assert plan_query(query, hybrid.index).kind == kind
 
 
+def test_quotation_marks_ask_for_the_exact_phrase_and_nothing_else(hybrid):
+    found = run(hybrid, '"star quilt"')
+    assert objects(found) == ["rec-a"]
+    assert found["search"]["weights"] == {"visual": 0.0, "keyword": 1.0}
+
+
+def test_curly_quotation_marks_work_like_straight_ones(hybrid):
+    plan = plan_query("“star quilt”", hybrid.index)
+    assert plan.kind == "phrase" and plan.expression == '"star quilt"'
+    assert plan.text == "star quilt"
+
+
+def test_a_field_search_shows_only_records_with_the_word_in_that_field(hybrid):
+    assert objects(run(hybrid, "title:quilt")) == ["rec-a"]
+
+
 def test_a_name_inside_a_longer_query_weighs_both_channels_equally(hybrid):
     plan = plan_query("portrait of mary smith", hybrid.index)
     assert plan.kind == "name" and plan.matched["whole"] is False
