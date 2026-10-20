@@ -247,17 +247,18 @@ With `mode=auto`, the default, the site reads the query first and weighs the cha
 that no record uses is corrected to a close, common word from the catalog; the response
 says so, and `correct_spelling=false` searches the words as typed. Every result carries
 its rank in each channel, the record fields that matched and an explanation such as
-"Title matched · Visual similarity #4". The response's `search` tells how the query was
+"Matches the title and name", or "Looks similar" when only its appearance brought it
+there. The response's `search` tells how the query was
 read and, when the catalog matched nothing, why: "No records mention both “quilt” and
 “airplane”; showing visually similar items".
 
-The photographs site shows all of this. Above the results it says how it read the query,
-with a one-click way to search otherwise ("Treated as a name query; matching the
-catalog first · Search by appearance instead"), any spelling correction with "Search
-instead for", why the catalog found nothing, and which groups the results come from.
-Results the catalog matched carry a badge such as "Title matched". A switch offers Auto,
-Appearance and Catalog, and in Catalog mode the group filter shows how many matches each
-group holds. The choices are kept in the address (`mode=visual`, `exact=1`).
+The photographs site keeps this out of the way of the pictures. A switch under the search
+bar offers Auto, Appearance and Catalog; Auto names how it read the query ("Auto · name")
+and says more when pointed at, so searching otherwise is one click. Above the results
+appear only a spelling correction, with "Search instead for", and why the catalog found
+nothing. Pointing at a result shows its title, its group and why it is there. In Catalog
+mode the group filter shows how many matches each group holds. The choices are kept in
+the address (`mode=visual`, `exact=1`).
 
 ## Limits That Protect a Public Site
 

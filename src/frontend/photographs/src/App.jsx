@@ -185,7 +185,7 @@ function App() {
         <h1><a href="#/">{title}</a></h1>
         {route.name === 'home' && collection && (
           <>
-            <p>{collection.description}</p>
+            {collection.description && <p>{collection.description}</p>}
             <p className="App-header-counts">
               {collection.objects.toLocaleString()} objects · {collection.images.toLocaleString()} images
               {collection.source_name ? ` · from ${collection.source_name}` : ''}
@@ -218,7 +218,11 @@ function App() {
                     : undefined}
                 />
                 {route.name === 'search' && collection?.catalog_search && (
-                  <ModeToggle mode={route.mode} onChange={handleModeChanged} />
+                  <ModeToggle
+                    mode={route.mode}
+                    onChange={handleModeChanged}
+                    reading={isLoading ? null : searchInfo}
+                  />
                 )}
               </div>
             </div>
@@ -234,7 +238,6 @@ function App() {
             <section className="wall">
               <div className="wall-heading">
                 <h2>Browse the collection</h2>
-                <p>A random selection. Select any image to see it larger and find similar ones.</p>
               </div>
               <ImageGrid items={wall} groupLabels={groupLabels} />
               {wallFailed && (
@@ -272,10 +275,6 @@ function App() {
                 query={route.query}
                 groups={selectedGroups}
                 mode={route.mode}
-                exact={route.exact}
-                results={results}
-                groupLabels={groupLabels}
-                groupLabel={collection?.group_label}
               />
             ) : null}
           />

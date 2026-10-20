@@ -43,13 +43,7 @@ const SearchResults = React.memo(({
 
   return (
     <div className="gallery-container">
-      <div className="results-heading">
-        <h2>{heading}</h2>
-        <p>
-          Each object appears once, even when it has several photos.
-          {notice ? '' : ' Ranked by an AI model, best matches first.'}
-        </p>
-      </div>
+      <h2 className="visually-hidden">{heading}</h2>
       {notice}
       <ImageGrid items={items} groupLabels={groupLabels} />
       <Pagination
