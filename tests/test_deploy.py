@@ -722,6 +722,16 @@ def test_bootstrap_import_swaps_in_the_prepared_collection_and_keeps_the_old_one
     assert "pull example/image:2" in log.read_text()
 
 
+def test_bootstrap_import_keeps_downloaded_models_between_restarts(import_site):
+    run, current, prepared, runner, _ = import_site
+    runner.write_text(f'docker run --rm -v "{current}:/data" "example/image:1" serve\n')
+    assert run("--from", str(prepared)).returncode == 0
+    mount = f'-v "{current}:/data" -v dce-models:/app/.cache/huggingface "example'
+    assert mount in runner.read_text()
+    assert run("--from", str(prepared)).returncode == 0
+    assert runner.read_text().count("dce-models") == 1
+
+
 def test_bootstrap_import_refuses_a_folder_that_is_not_a_prepared_collection(
     import_site,
 ):

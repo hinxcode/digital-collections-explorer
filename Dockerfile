@@ -24,8 +24,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 1000 is the user id Hugging Face Spaces runs containers as.
 RUN useradd --create-home --uid 1000 dce && \
-    mkdir -p /data /app/.cache && \
-    chown dce:dce /data /app/.cache
+    mkdir -p /data /app/.cache/huggingface && \
+    chown -R dce:dce /data /app/.cache
 
 ENV DCE_DATA_DIR=/data \
     HF_HOME=/app/.cache/huggingface \
