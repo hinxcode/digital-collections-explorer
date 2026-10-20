@@ -63,6 +63,7 @@ async def lifespan(app):
     if problem:
         logger.error(problem)
         raise RuntimeError(problem)
+    search.hybrid_search.warm()
 
     logger.info(f"Starting API server on {settings.host}:{settings.port}")
     logger.info(f"Debug mode: {settings.debug}")

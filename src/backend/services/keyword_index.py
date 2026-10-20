@@ -262,3 +262,12 @@ class KeywordIndex:
                             )
                 self._shapes = {s for s, n in counts.items() if n >= MIN_SHAPE_RECORDS}
         return self._shapes
+
+    def warm(self) -> None:
+        """Read the vocabulary, gazetteer and identifier patterns before the first query"""
+        if self.available():
+            logger.info(
+                f"Catalog search knows {len(self.vocabulary)} words, "
+                f"{len(self.gazetteer)} catalog terms and "
+                f"{len(self.identifier_shapes)} identifier patterns"
+            )

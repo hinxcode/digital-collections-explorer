@@ -159,6 +159,11 @@ class HybridSearch:
             self._index = KeywordIndex(path)
         return self._index if self._index.available() else None
 
+    def warm(self) -> None:
+        """Load the catalog index now, so the first query is as quick as the rest"""
+        if self.index is not None:
+            self.index.warm()
+
     def search(
         self,
         query: str,
