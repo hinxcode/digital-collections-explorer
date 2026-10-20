@@ -33,7 +33,12 @@
 }
 
 .mode-toggle-reading {
-  opacity: 0.8;
+  font-size: 0.85rem;
+  color: #9a9a9a;
+}
+
+.mode-toggle-reading[title] {
+  cursor: help;
 }
 
 @media (max-width: 420px) {
