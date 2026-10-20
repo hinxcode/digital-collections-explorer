@@ -152,15 +152,15 @@ def test_a_title_match_outranks_a_mention_in_the_notes(hybrid):
         "object_types",
         "notes",
     ]
-    assert found["results"][0]["explanation"] == "Title and Subject matched"
-    assert found["results"][1]["explanation"] == "Description matched"
+    assert found["results"][0]["explanation"] == "Matches the title and subject"
+    assert found["results"][1]["explanation"] == "Matches the description"
 
 
 def test_searching_by_appearance_only_leaves_the_catalog_out(hybrid):
     found = run(hybrid, "quilt", mode="visual")
     assert objects(found) == ["rec-a", "rec-b", "rec-c", "b2"]
     assert all(r["provenance"]["keyword"] is None for r in found["results"])
-    assert found["results"][0]["explanation"] == "Visual similarity #1"
+    assert found["results"][0]["explanation"] == "Looks similar"
     assert found["search"]["weights"] == {"visual": 1.0, "keyword": 0.0}
 
 
@@ -257,7 +257,7 @@ def test_a_catalog_number_finds_its_record_without_the_visual_channel(hybrid):
     found = run(hybrid, "TE.E388879")
     assert objects(found) == ["rec-a"]
     assert found["search"]["weights"]["visual"] == 0.0
-    assert found["results"][0]["explanation"] == "Catalog number matched"
+    assert found["results"][0]["explanation"] == "Matches the catalog number"
 
 
 def test_a_year_matches_catalog_dates_and_its_decade(hybrid):
@@ -271,7 +271,8 @@ def test_the_response_states_how_the_query_was_read(hybrid):
         "Treated as a name query; matching the catalog first"
     )
     assert objects(found)[0] == "rec-a"
-    assert found["results"][0]["explanation"] == "Name matched · Visual similarity #1"
+    assert found["results"][0]["explanation"] == "Matches the name"
+    assert found["results"][0]["provenance"]["visual"] == 1
 
 
 def test_a_collection_without_catalog_text_has_no_keyword_index(tmp_path, monkeypatch):

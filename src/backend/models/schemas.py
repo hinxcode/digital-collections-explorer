@@ -31,7 +31,7 @@ class SearchResult(BaseModel):
     )
     explanation: Optional[str] = Field(
         None,
-        description="Why the result is here, such as Title matched · Visual similarity #4",
+        description="Why the result is here, such as Matches the title and name",
     )
 
 
