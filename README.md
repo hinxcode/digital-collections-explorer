@@ -253,12 +253,12 @@ read and, when the catalog matched nothing, why: "No records mention both “qui
 “airplane”; showing visually similar items".
 
 The photographs site keeps this out of the way of the pictures. A switch under the search
-bar offers Auto, Appearance and Catalog; Auto names how it read the query ("Auto · name")
-and says more when pointed at, so searching otherwise is one click. Above the results
-appear only a spelling correction, with "Search instead for", and why the catalog found
-nothing. Pointing at a result shows its title, its group and why it is there. In Catalog
-mode the group filter shows how many matches each group holds. The choices are kept in
-the address (`mode=visual`, `exact=1`).
+bar offers Auto, Appearance and Catalog, so searching otherwise is one click. Beside it,
+Auto says how it read the query ("Read as a name") and says more when pointed at; a plain
+description gets no remark. Above the results appear only a spelling correction, with
+"Search instead for", and why the catalog found nothing. Pointing at a result shows its
+title, its group and why it is there. In Catalog mode the group filter shows how many
+matches each group holds. The choices are kept in the address (`mode=visual`, `exact=1`).
 
 ## Limits That Protect a Public Site
 
