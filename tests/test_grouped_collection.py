@@ -1,3 +1,4 @@
+import io
 import json
 import sqlite3
 
@@ -5,6 +6,7 @@ import numpy as np
 import pytest
 import torch
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from src.backend.services.collection_service import CollectionService
 from src.backend.services.collection_store import load_grouped
@@ -242,6 +244,20 @@ class FixedModel:
         return scores
 
 
+class SaturatingModel(FixedModel):
+    def encode_image(self, image):
+        return torch.tensor([[0.8, 0.6, 0.0]])
+
+    def transform_score(self, scores):
+        return torch.ones_like(scores)
+
+
+def picture():
+    data = io.BytesIO()
+    Image.new("RGB", (8, 8)).save(data, format="PNG")
+    return data.getvalue()
+
+
 @pytest.fixture()
 def site(grouped, monkeypatch, tmp_path):
     monkeypatch.setattr(
@@ -297,3 +313,22 @@ def test_an_item_page_shows_the_record_it_belongs_to(site, grouped):
     answer = site.get("/api/items/b1").json()
     assert answer["metadata"]["group"] == "west"
     assert answer["record"]["fields"] == [{"label": "Date", "value": "1850"}]
+
+
+def test_image_search_scores_say_how_alike_the_images_are(site, monkeypatch):
+    from src.backend.api.routes import search
+
+    monkeypatch.setattr(search, "model_service", SaturatingModel())
+    answer = site.post("/api/search/image", files={"image": ("a.png", picture())})
+    results = answer.json()["results"]
+    assert [r["id"] for r in results] == ["a2", "b1", "a3", "b2"]
+    scores = [r["score"] for r in results]
+    assert scores == pytest.approx([0.861, 0.799, 0.6, 0.0], abs=0.001)
+
+
+def test_text_search_keeps_the_models_own_match_score(site, monkeypatch):
+    from src.backend.api.routes import search
+
+    monkeypatch.setattr(search, "model_service", SaturatingModel())
+    answer = site.get("/api/search/text?query=quilt").json()
+    assert {r["score"] for r in answer["results"]} == {1.0}
