@@ -44,7 +44,9 @@ router = APIRouter(
 )
 
 
-def ranked_results(embedding, limit, page, group_by_object, groups=None):
+def ranked_results(
+    embedding, limit, page, group_by_object, groups=None, score_transform=None
+):
     if not embedding_service.is_loaded:
         embedding_service.load_embeddings()
     scores = embedding_service.similarity_scores(embedding)
@@ -53,7 +55,7 @@ def ranked_results(embedding, limit, page, group_by_object, groups=None):
         limit,
         (page - 1) * limit,
         group_by_object,
-        score_transform=model_service.transform_score,
+        score_transform=score_transform,
         groups=groups,
     )
     return SearchResponse(results=[SearchResult(**result) for result in raw_results])
@@ -117,7 +119,14 @@ async def search_by_text(
             )
             return SearchResponse(**found)
         embedding = model_service.encode_text(query)
-        return ranked_results(embedding, limit, page, group_by_object, wanted)
+        return ranked_results(
+            embedding,
+            limit,
+            page,
+            group_by_object,
+            wanted,
+            score_transform=model_service.transform_score,
+        )
 
     async with search_queue.turn():
         try:
@@ -139,7 +148,7 @@ async def search_by_image(
     ),
     groups: Optional[str] = Form(None, description=GROUPS_DESCRIPTION),
 ):
-    """Search for similar content using an uploaded image."""
+    """Search for images like an uploaded one, scored by cosine similarity."""
     wanted = checked_groups(groups)
     image_data = await read_upload(image)
 
