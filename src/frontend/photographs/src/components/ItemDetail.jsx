@@ -4,6 +4,7 @@ import Zoom from 'yet-another-react-lightbox/plugins/zoom';
 import 'yet-another-react-lightbox/styles.css';
 import CatalogText from './CatalogText';
 import ImageGrid from './ImageGrid';
+import RelatedSources from './RelatedSources';
 import { itemHref } from '../hooks/useHashRoute';
 import { getItem, getSimilar, imageUrl } from '../services/api';
 import { plainText } from '../services/catalogText';
@@ -308,6 +309,8 @@ function ItemDetail({ id, collection, canGoBack }) {
           )}
         </div>
       </div>
+
+      <RelatedSources related={object?.record?.related} sources={collection?.sources} />
 
       {similar.length > 0 && (
         <section>
