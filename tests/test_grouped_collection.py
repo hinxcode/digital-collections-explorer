@@ -16,6 +16,8 @@ from src.backend.services.index_info import describe_mismatch
 MODEL = "fake/model"
 PAGE = "https://n2t.net/ark:/65665/east-1"
 ORIGINAL = "https://example.org/originals/a1.jpg"
+FLICKR_PAGE = "https://www.flickr.com/photos/smithsonian/2/"
+COMMONS_USAGE = "https://www.flickr.com/commons/usage/"
 
 GROUPS = {
     "east": [
@@ -163,6 +165,86 @@ def test_an_item_carries_its_record_fields_in_catalog_order_and_its_facets(group
 
 def test_a_collection_prepared_without_record_details_still_serves_items(grouped):
     assert grouped.item("a1")["record"] == {"fields": [], "facets": {}}
+
+
+def add_related_sources(root):
+    con = sqlite3.connect(root / "embeddings" / "metadata.sqlite")
+    con.execute(
+        "CREATE TABLE related_sources (record_id TEXT, source_id TEXT, source TEXT, "
+        "link_type TEXT, image_id TEXT, url TEXT, title TEXT, thumbnail TEXT, "
+        "rights TEXT, rights_url TEXT, counts TEXT)"
+    )
+    con.execute(
+        "CREATE TABLE related_tags (source_id TEXT, position INTEGER, tag TEXT)"
+    )
+    con.executemany(
+        "INSERT INTO related_sources VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            (
+                "rec-a",
+                "flickr:2",
+                "flickr",
+                "same_image",
+                "a2",
+                FLICKR_PAGE,
+                "Quilt on a line",
+                "related/flickr/2.jpg",
+                "No known copyright restrictions",
+                COMMONS_USAGE,
+                json.dumps({"faves": 3, "comments": 1}),
+            ),
+            (
+                "rec-a",
+                "flickr:1",
+                "flickr",
+                "same_record",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            ),
+        ],
+    )
+    con.executemany(
+        "INSERT INTO related_tags VALUES (?, ?, ?)",
+        [("flickr:2", 2, "patchwork"), ("flickr:2", 1, "quilt")],
+    )
+    con.commit()
+    con.close()
+    folder = root / "related" / "flickr"
+    folder.mkdir(parents=True)
+    (folder / "2.jpg").write_bytes(b"flickr thumbnail")
+
+
+def test_an_item_lists_the_photos_of_its_record_from_other_sources(grouped):
+    add_related_sources(grouped.embeddings.embeddings_dir.parent)
+    related = grouped.item("a1")["record"]["related"]
+    assert related == [
+        {
+            "id": "flickr:1",
+            "source": "flickr",
+            "link_type": "same_record",
+            "has_thumbnail": False,
+            "counts": {},
+            "tags": [],
+        },
+        {
+            "id": "flickr:2",
+            "source": "flickr",
+            "link_type": "same_image",
+            "image_id": "a2",
+            "url": FLICKR_PAGE,
+            "title": "Quilt on a line",
+            "has_thumbnail": True,
+            "rights": {"name": "No known copyright restrictions", "url": COMMONS_USAGE},
+            "counts": {"faves": 3, "comments": 1},
+            "tags": ["quilt", "patchwork"],
+        },
+    ]
+    assert grouped.item("b1")["record"]["related"] == []
 
 
 def test_searching_some_groups_returns_only_their_images(grouped):
@@ -313,6 +395,19 @@ def test_an_item_page_shows_the_record_it_belongs_to(site, grouped):
     answer = site.get("/api/items/b1").json()
     assert answer["metadata"]["group"] == "west"
     assert answer["record"]["fields"] == [{"label": "Date", "value": "1850"}]
+
+
+def test_a_related_photo_is_served_from_the_collection_folder(site, grouped):
+    add_related_sources(grouped.embeddings.embeddings_dir.parent)
+    answer = site.get("/images/related/flickr:2")
+    assert answer.status_code == 200
+    assert answer.content == b"flickr thumbnail"
+    assert site.get("/images/related/flickr:1").status_code == 404
+    assert site.get("/images/related/flickr:9").status_code == 404
+
+
+def test_a_collection_without_related_sources_serves_no_related_photos(site):
+    assert site.get("/images/related/flickr:2").status_code == 404
 
 
 def test_image_search_scores_say_how_alike_the_images_are(site, monkeypatch):

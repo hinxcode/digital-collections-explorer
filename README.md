@@ -192,7 +192,12 @@ my-collection/
                          records(record_id, title, source_url)
                          optional: record_fields(record_id, position, label, value)
                                    record_facets(record_id, facet, value)
+                                   related_sources(record_id, source_id, source, link_type,
+                                                   image_id, url, title, thumbnail, rights,
+                                                   rights_url, counts)
+                                   related_tags(source_id, position, tag)
   thumbnails/  processed/   the image files that items point to, relative to my-collection
+  related/                  thumbnails of related photos, relative to my-collection
 ```
 
 Each entry in `models` has a `key` (its folder under `vectors/`), a `type` (`clip`,
@@ -213,6 +218,15 @@ the chosen groups in the address, so a filtered search can be shared.
 When `record_fields` is present, an item page lists its record's fields in their
 `position` order, with repeated labels grouped together, and `/api/items/<id>` returns
 them with the record's facets under `record`.
+
+When `related_sources` is present, an item page also shows where else its record
+appears, such as the same object on Flickr Commons: the photo's thumbnail, served from
+`/images/related/<source_id>`, its title linking to it, its faves, comments and
+galleries from the `counts` JSON, its tags from `related_tags` in `position` order, and
+its rights. `/api/items/<id>` returns them under `record.related`. Name each source for
+visitors in `collection.json`, for example
+`"sources": {"flickr": {"label": "Flickr Commons", "note": "..."}}`: the section is
+headed "On Flickr Commons" and shows the note under the heading.
 
 ## Searching by Appearance and by Catalog
 

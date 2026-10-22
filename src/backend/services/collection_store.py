@@ -28,6 +28,16 @@ FIELDS_QUERY = (
 FACETS_QUERY = (
     "SELECT facet, value FROM record_facets WHERE record_id = ? ORDER BY facet, value"
 )
+RELATED_QUERY = """
+    SELECT source_id, source, link_type, image_id, url, title, thumbnail, rights,
+           rights_url, counts
+    FROM related_sources WHERE record_id = ? ORDER BY source, source_id
+"""
+TAGS_QUERY = "SELECT tag FROM related_tags WHERE source_id = ? ORDER BY position"
+THUMBNAIL_QUERY = (
+    "SELECT thumbnail FROM related_sources "
+    "WHERE source_id = ? AND thumbnail IS NOT NULL"
+)
 
 
 @dataclass
@@ -157,10 +167,46 @@ def has_table(path: Path, name: str) -> bool:
         con.close()
 
 
+def describe_related(
+    con: sqlite3.Connection, row: tuple, has_tags: bool
+) -> Dict[str, Any]:
+    """One photo or page from another source, such as Flickr, that shows this record"""
+    (
+        source_id,
+        source,
+        link_type,
+        image_id,
+        url,
+        title,
+        thumbnail,
+        rights,
+        rights_url,
+        counts,
+    ) = row
+    described = {
+        "id": source_id,
+        "source": source,
+        "link_type": link_type,
+        "image_id": image_id,
+        "url": url,
+        "title": title,
+        "has_thumbnail": bool(thumbnail),
+        "rights": {"name": rights, "url": rights_url} if rights else None,
+        "counts": json.loads(counts) if counts else {},
+        "tags": (
+            [tag for (tag,) in con.execute(TAGS_QUERY, (source_id,))]
+            if has_tags
+            else []
+        ),
+    }
+    return {k: v for k, v in described.items() if v is not None}
+
+
 def read_record_details(path: Path, record_id: str) -> Dict[str, Any]:
-    """The catalog fields and facets of one record, when metadata.sqlite keeps them"""
+    """The catalog fields, facets and related sources of one record, when kept"""
     fields: List[Dict[str, str]] = []
     facets: Dict[str, List[str]] = {}
+    related: Optional[List[Dict[str, Any]]] = None
     con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     try:
         tables = {
@@ -177,6 +223,26 @@ def read_record_details(path: Path, record_id: str) -> Dict[str, Any]:
         if "record_facets" in tables:
             for facet, value in con.execute(FACETS_QUERY, (record_id,)):
                 facets.setdefault(facet, []).append(value)
+        if "related_sources" in tables:
+            related = [
+                describe_related(con, row, "related_tags" in tables)
+                for row in con.execute(RELATED_QUERY, (record_id,)).fetchall()
+            ]
     finally:
         con.close()
-    return {"fields": fields, "facets": facets}
+    details: Dict[str, Any] = {"fields": fields, "facets": facets}
+    if related is not None:
+        details["related"] = related
+    return details
+
+
+def related_thumbnail(path: Path, source_id: str) -> Optional[str]:
+    """Where the thumbnail of a related photo is kept, relative to the collection"""
+    if not has_table(path, "related_sources"):
+        return None
+    con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    try:
+        found = con.execute(THUMBNAIL_QUERY, (source_id,)).fetchone()
+    finally:
+        con.close()
+    return found[0] if found else None

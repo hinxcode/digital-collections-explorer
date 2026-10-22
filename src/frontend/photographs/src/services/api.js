@@ -108,6 +108,13 @@ export const imageUrl = (id, size = 'full') => (
   `${API_URL}/images/${encodeURIComponent(id)}?size=${size}`
 );
 
+/**
+ * Where the thumbnail of a photo from another source, such as Flickr, is served from
+ * @param {string} id - The photo's id in that source, such as flickr:2535935153
+ * @returns {string}
+ */
+export const relatedImageUrl = (id) => `${API_URL}/images/related/${encodeURIComponent(id)}`;
+
 const getJson = async (path) => {
   const response = await fetch(`${API_URL}${path}`);
 
