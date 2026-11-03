@@ -250,7 +250,9 @@ DCE_MCP=1 DCE_DATA_DIR=data/collections/my-collection python -m src.backend.main
 claude mcp add --transport http my-collection http://localhost:8000/mcp
 ```
 
-Assistants that call the endpoint from the cloud, such as Claude's custom connectors, need a public HTTPS address; on AWS, deploy with Public HTTPS.
+Assistants that call the endpoint from the cloud, such as Claude's custom connectors, need a public HTTPS address; on AWS, deploy with `--https`.
+
+The deploy scripts set both variables for you. On any Linux machine, add `--mcp` and `--public-url` to `deploy/bootstrap.sh install`, or later run `sudo deploy/bootstrap.sh mcp --name my-collection --on` (or `--off`). On AWS, add `--mcp` to `deploy/aws/deploy.sh`, or later run `deploy/aws/mcp.sh my-collection --on` (or `--off`); it links to the site's own address, including its domain and path, and waits until the endpoint answers. With Docker Compose, set `MCP=1` and `PUBLIC_URL`. Turning MCP on or off restarts the site, which takes about a minute.
 
 ## Deploying to a Server or to AWS
 

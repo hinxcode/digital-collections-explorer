@@ -28,6 +28,7 @@ DOMAIN=""
 CERTIFICATE_ARN=""
 NO_DOMAIN="false"
 BASE_PATH=""
+MCP="false"
 ASSUME_YES="false"
 
 usage() {
@@ -61,6 +62,8 @@ Everything you leave out keeps the value the deployment already has.
   --base-path PATH      serve the site under PATH, such as /explorer, for a website of
                         your own whose proxy forwards that path here. Only when the
                         machine is first created
+  --mcp                 also answer AI assistants at /mcp, with links to the site's address.
+                        Later, turn it on or off with mcp.sh
   --budget USD          email an alert when the monthly bill passes this amount
   --email ADDRESS       where to send that alert
   --image IMAGE         container image to install. Later, switch versions with update.sh
@@ -94,6 +97,7 @@ while [ $# -gt 0 ]; do
     --certificate-arn) CERTIFICATE_ARN="$2"; shift 2 ;;
     --no-domain) NO_DOMAIN="true"; shift ;;
     --base-path) BASE_PATH="$2"; shift 2 ;;
+    --mcp) MCP="true"; shift ;;
     --budget) BUDGET="$2"; shift 2 ;;
     --email) EMAIL="$2"; shift 2 ;;
     --image) IMAGE="$2"; shift 2 ;;
@@ -327,6 +331,7 @@ fi
 [ "$BUDGET" != "0" ] && echo "  1 spending alert at \$$BUDGET per month, sent to $EMAIL"
 [ -n "$COLLECTION_FILE" ] && echo "  The site will describe itself with $COLLECTION_FILE"
 [ -n "$BASE_PATH" ] && echo "  The site answers under $BASE_PATH, for a proxy of your own to forward there"
+[ "$MCP" = "true" ] && echo "  The site also answers AI assistants at /mcp"
 echo
 echo "Estimated cost while it is running:"
 "$PYTHON" "$HERE/estimate_cost.py" --region "$REGION" \
@@ -396,6 +401,17 @@ if [ "$HTTPS" = "true" ] || [ "$CURRENT_HTTPS" = "true" ]; then
     [ -n "$MACHINE_BOOTSTRAP_URL" ] && configure_flags+=(--bootstrap-url "$MACHINE_BOOTSTRAP_URL")
     "$HERE/configure.sh" "$NAME" "${configure_flags[@]}" ||
         echo "The deployment itself succeeded, but the site cannot tell visitors apart yet. Once the machine runs a current version, run: deploy/aws/configure.sh $NAME --set proxy_hops=$hops --region $REGION"
+fi
+
+if [ "$MCP" = "true" ]; then
+    echo
+    mcp_flags=(--on --region "$REGION")
+    [ -n "$MACHINE_BOOTSTRAP_URL" ] && mcp_flags+=(--bootstrap-url "$MACHINE_BOOTSTRAP_URL")
+    "$HERE/mcp.sh" "$NAME" "${mcp_flags[@]}" ||
+        echo "The deployment itself succeeded. Once the site is up, turn MCP on with: deploy/aws/mcp.sh $NAME --on --region $REGION"
+elif [ "$IS_UPDATE" = "true" ] && { [ "$HTTPS" != "$CURRENT_HTTPS" ] || [ "$DOMAIN" != "$(current_parameter Domain)" ]; }; then
+    echo
+    echo "The site's address changed. If it answers AI assistants, point their links at the new address with: deploy/aws/mcp.sh $NAME --on --region $REGION"
 fi
 
 if [ -n "$COLLECTION_FILE" ]; then

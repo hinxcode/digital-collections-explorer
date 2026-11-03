@@ -17,6 +17,8 @@ ANONYMOUS="false"
 LIMIT=""
 PORT="8000"
 BASE_PATH=""
+MCP=""
+PUBLIC_URL=""
 KEEP_DATA="false"
 AS_JSON="false"
 COLLECTION_FILE=""
@@ -31,7 +33,7 @@ MODEL_CACHE="/app/.cache/huggingface"
 
 usage() {
     cat <<'EOF'
-Usage: bootstrap.sh <install|status|describe|configure|update|import|uninstall> --name NAME [options]
+Usage: bootstrap.sh <install|status|describe|configure|mcp|update|import|uninstall> --name NAME [options]
 
 install options:
   --source SRC        a folder, s3://bucket/prefix, or a .parquet manifest to index
@@ -42,6 +44,9 @@ install options:
   --limit N           only index the first N images
   --port PORT         port for the site (default 8000)
   --base-path PATH    serve the site under this path, e.g. /maps, behind a proxy
+  --mcp               also answer AI assistants over the Model Context Protocol at /mcp
+  --public-url URL    the address visitors use, when a proxy or CDN rewrites it, so the
+                      links MCP hands out lead back through it
   --image IMAGE       container image to run
   --image-tar FILE    load the image from a file instead of downloading it
   --data-root DIR     where collections are stored (default /opt/dce)
@@ -56,6 +61,11 @@ describe options:
 configure options:
   --set KEY=VALUE     change a limit of a running site. No restart needed. Repeatable.
                       max_upload_mb, searches_per_minute, concurrent_searches, proxy_hops
+
+mcp options:
+  --on                answer AI assistants at /mcp. The site restarts, which takes a minute
+  --public-url URL    with --on, the address visitors use, as for install
+  --off               stop answering at /mcp. The site restarts
 
 update options:
   --image IMAGE       switch the site to this image. The index is kept.
@@ -87,6 +97,9 @@ parse_args() {
         --limit) LIMIT="$2"; shift 2 ;;
         --port) PORT="$2"; shift 2 ;;
         --base-path) BASE_PATH="$2"; shift 2 ;;
+        --mcp | --on) MCP="on"; shift ;;
+        --off) MCP="off"; shift ;;
+        --public-url) PUBLIC_URL="${2%/}"; shift 2 ;;
         --image) IMAGE="$2"; IMAGE_WAS_GIVEN="true"; shift 2 ;;
         --image-tar) IMAGE_TAR="$2"; shift 2 ;;
         --data-root) DATA_ROOT="$2"; shift 2 ;;
@@ -100,6 +113,9 @@ parse_args() {
         esac
     done
     [ -n "$NAME" ] || fail "--name is required"
+    [ -z "$PUBLIC_URL" ] || [[ "$PUBLIC_URL" =~ ^https?://[A-Za-z0-9.:/_~-]+$ ]] ||
+        fail "--public-url must be an address such as https://collection.example.org"
+    [ -z "$PUBLIC_URL" ] || [ "$MCP" = "on" ] || fail "--public-url only applies with --mcp or --on"
     [[ "$NAME" =~ ^[a-z0-9][a-z0-9-]*$ ]] ||
         fail "--name may only contain lowercase letters, digits and hyphens"
     COLLECTION_DIR="$DATA_ROOT/collections/$NAME"
@@ -156,6 +172,12 @@ resolve_source() {
     esac
 }
 
+mcp_environment() {
+    [ "$MCP" = "on" ] || return 0
+    printf ' -e DCE_MCP=1'
+    [ -z "$PUBLIC_URL" ] || printf ' -e DCE_PUBLIC_URL=%s' "$PUBLIC_URL"
+}
+
 write_runner() {
     local ingest_flags=""
     [ -n "$FETCH_VIA" ] && ingest_flags="$ingest_flags --fetch-via $FETCH_VIA"
@@ -176,7 +198,7 @@ fi
 
 docker rm -f $SERVICE >/dev/null 2>&1 || true
 exec docker run --rm --name $SERVICE \\
-    -p $PORT:8000 -e DCE_COLLECTION=$NAME -e DCE_BASE_PATH=$BASE_PATH \\
+    -p $PORT:8000 -e DCE_COLLECTION=$NAME -e DCE_BASE_PATH=$BASE_PATH$(mcp_environment) \\
     -v "$COLLECTION_DIR:/data" -v $MODEL_VOLUME:$MODEL_CACHE \\
     "$IMAGE" serve
 EOF
@@ -281,6 +303,13 @@ do_status() {
             grep -E '^  "(indexed|pending|skipped|failed)"' | tr -d '",' || true
     fi
     echo "Image: $(image_in_use)"
+    if ! mcp_in_use; then
+        echo "MCP: off"
+    elif [ -n "$(public_url_in_use)" ]; then
+        echo "MCP: on, at $(public_url_in_use)/mcp"
+    else
+        echo "MCP: on, at /mcp on the site's own address"
+    fi
     if docker ps --format '{{.Names}}' | grep -qx "$SERVICE"; then
         echo "Site: running on port $(port_in_use)"
     else
@@ -307,6 +336,8 @@ do_configure() {
 }
 
 image_in_use() { grep -oE '"[^"]+" (ingest|serve)' "$RUNNER" | head -1 | cut -d'"' -f2; }
+mcp_in_use() { grep -q -- '-e DCE_MCP=1' "$RUNNER"; }
+public_url_in_use() { grep -oE -- '-e DCE_PUBLIC_URL=[^ ]+' "$RUNNER" | head -1 | cut -d= -f2-; }
 port_in_use() { grep -oE '\-p [0-9]+:8000' "$RUNNER" | grep -oE '[0-9]+' | head -1; }
 
 switch_image() {
@@ -330,6 +361,21 @@ restart_site() {
     else
         docker rm -f "$SERVICE" >/dev/null 2>&1 || true
         nohup "$RUNNER" >"$COLLECTION_DIR/runner.log" 2>&1 &
+    fi
+}
+
+do_mcp() {
+    [ -n "$MCP" ] || fail "--on or --off is required"
+    [ -f "$RUNNER" ] || fail "no collection named $NAME in $DATA_ROOT"
+    [ -w "$RUNNER" ] || fail "run this with sudo"
+    sed -i.previous -E 's# -e DCE_MCP=[^ ]*##g; s# -e DCE_PUBLIC_URL=[^ ]*##g' "$RUNNER"
+    sed -i.previous -E "s#(-e DCE_BASE_PATH=[^ ]*)#\1$(mcp_environment)#" "$RUNNER"
+    rm -f "$RUNNER.previous"
+    restart_site
+    if [ "$MCP" = "on" ]; then
+        say "$NAME answers AI assistants at ${PUBLIC_URL:-its own address}/mcp once it has restarted"
+    else
+        say "$NAME no longer answers at /mcp once it has restarted"
     fi
 }
 
@@ -433,6 +479,7 @@ install) do_install ;;
 status) do_status ;;
 describe) do_describe ;;
 configure) do_configure ;;
+mcp) do_mcp ;;
 update) do_update ;;
 import) do_import ;;
 uninstall) do_uninstall ;;

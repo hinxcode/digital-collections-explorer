@@ -42,6 +42,7 @@ def test_estimate_never_shows_a_total_it_cannot_back_up(estimate_cost):
         "deploy/aws/describe.sh",
         "deploy/aws/configure.sh",
         "deploy/aws/import.sh",
+        "deploy/aws/mcp.sh",
     ],
 )
 def test_scripts_parse_and_explain_themselves(script):
@@ -76,6 +77,8 @@ case "$*" in
 *"describe-stacks"*"InstanceId"*)
     [ "$FAKE_STACK_EXISTS" = "true" ] || grep -q "cloudformation deploy" "$FAKE_AWS_LOG" || exit 255
     echo "i-0existing" ;;
+*"OutputKey=='SiteUrl'"*) echo "$FAKE_SITE_URL" ;;
+*"ParameterKey=='BootstrapUrl'"*) echo "https://example.org/bootstrap.sh" ;;
 *"describe-stacks"*"Parameters[]"*)
     printf 'CollectionName\tdemo\n'
     if [ -n "$FAKE_PREPARED_FROM" ]; then
@@ -148,6 +151,15 @@ def fake_deploy(tmp_path):
     (fake_bin / "python3").chmod(0o755)
     (fake_bin / "sleep").write_text("#!/usr/bin/env bash\n")
     (fake_bin / "sleep").chmod(0o755)
+    (fake_bin / "curl").write_text(
+        "#!/usr/bin/env bash\n"
+        'case "$*" in\n'
+        '*/mcp*) printf "%s" "$FAKE_MCP_ANSWER" ;;\n'
+        "*/api/health*) printf 200 ;;\n"
+        "*) printf 000 ;;\n"
+        "esac\n"
+    )
+    (fake_bin / "curl").chmod(0o755)
     log = tmp_path / "aws.log"
 
     def run(
@@ -165,6 +177,8 @@ def fake_deploy(tmp_path):
         certificate_status="ISSUED",
         certificate_names="collection.example.org",
         base_path="",
+        site_url="https://d1example.cloudfront.net",
+        mcp_answer="400",
     ):
         import os
 
@@ -186,6 +200,8 @@ def fake_deploy(tmp_path):
             "FAKE_CERTIFICATE_STATUS": certificate_status,
             "FAKE_CERTIFICATE_NAMES": certificate_names,
             "FAKE_BASE_PATH": base_path,
+            "FAKE_SITE_URL": site_url,
+            "FAKE_MCP_ANSWER": mcp_answer,
         }
         if script != "deploy.sh":
             command = ["bash", str(scripts / script), "demo", *extra]
@@ -326,6 +342,91 @@ def test_the_path_is_kept_and_cannot_change_once_the_machine_exists(fake_deploy)
     assert result.returncode != 0
     assert deploys == []
     assert "only applies when a machine is first created" in result.stderr
+
+
+def test_mcp_turns_on_with_links_to_the_sites_own_address(fake_deploy):
+    site = "https://collection.example.org/explorer"
+    result, log = fake_deploy(True, "--on", script="mcp.sh", site_url=site)
+    assert result.returncode == 0, result.stderr
+    sent = [c for c in log if "ssm send-command" in c]
+    assert f"mcp --name demo --on --public-url {site}" in sent[0]
+    assert "https://example.org/bootstrap.sh" in sent[0]
+    assert f"claude mcp add --transport http demo {site}/mcp" in result.stdout
+
+
+def test_mcp_says_when_the_site_runs_a_version_without_it(fake_deploy):
+    result, _ = fake_deploy(True, "--on", script="mcp.sh", mcp_answer="404")
+    assert result.returncode != 0
+    assert "update.sh" in result.stderr
+
+
+def test_mcp_can_be_turned_off(fake_deploy):
+    result, log = fake_deploy(True, "--off", script="mcp.sh")
+    assert result.returncode == 0, result.stderr
+    assert any("mcp --name demo --off" in c for c in log)
+
+
+def test_deploy_can_turn_mcp_on_once_the_site_is_there(fake_deploy):
+    result, deploys = fake_deploy(False, "--https", "--mcp")
+    assert result.returncode == 0, result.stderr
+    assert "also answers AI assistants at /mcp" in result.stdout
+    assert "Turning MCP on for demo" in result.stdout
+
+
+def test_changing_the_address_reminds_to_point_mcp_at_it(fake_deploy):
+    result, _ = fake_deploy(True, "--https")
+    assert result.returncode == 0, result.stderr
+    assert "deploy/aws/mcp.sh demo --on" in result.stdout
+
+
+RUNNER = """#!/usr/bin/env bash
+set -euo pipefail
+
+docker rm -f dce-demo >/dev/null 2>&1 || true
+exec docker run --rm --name dce-demo \\
+    -p 80:8000 -e DCE_COLLECTION=demo -e DCE_BASE_PATH=/x \\
+    -v "/opt/dce/collections/demo:/data" -v dce-models:/app/.cache/huggingface \\
+    "example/image:1" serve
+"""
+
+
+def test_bootstrap_switches_mcp_in_the_runner_and_reports_it(tmp_path):
+    import os
+
+    root = tmp_path / "dce"
+    (root / "collections" / "demo").mkdir(parents=True)
+    runner = root / "run-demo.sh"
+    runner.write_text(RUNNER)
+    runner.chmod(0o755)
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    for tool in ("docker", "systemctl"):
+        (fake_bin / tool).write_text("#!/usr/bin/env bash\n")
+        (fake_bin / tool).chmod(0o755)
+    env = {**os.environ, "PATH": f"{fake_bin}:{os.environ['PATH']}"}
+
+    def bootstrap(*args):
+        command = ["bash", str(ROOT / "deploy/bootstrap.sh"), *args]
+        command += ["--name", "demo", "--data-root", str(root)]
+        return subprocess.run(command, capture_output=True, text=True, env=env)
+
+    site = "https://c.example.org/x"
+    for _ in range(2):
+        on = bootstrap("mcp", "--on", "--public-url", site + "/")
+        assert on.returncode == 0, on.stderr
+    assert f"-e DCE_BASE_PATH=/x -e DCE_MCP=1 -e DCE_PUBLIC_URL={site} \\" in (
+        runner.read_text()
+    )
+    assert runner.read_text().count("DCE_MCP") == 1
+    assert f"MCP: on, at {site}/mcp" in bootstrap("status").stdout
+    off = bootstrap("mcp", "--off")
+    assert off.returncode == 0, off.stderr
+    assert "DCE_MCP" not in runner.read_text()
+    assert "DCE_PUBLIC_URL" not in runner.read_text()
+    assert "-e DCE_BASE_PATH=/x \\" in runner.read_text()
+    assert "MCP: off" in bootstrap("status").stdout
+    refused = bootstrap("mcp", "--on", "--public-url", "javascript:alert(1)")
+    assert refused.returncode != 0
 
 
 def test_script_survives_being_saved_while_it_waits_for_aws(fake_deploy):
