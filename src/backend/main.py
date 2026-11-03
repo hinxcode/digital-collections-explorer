@@ -2,7 +2,7 @@ import logging
 import os
 import socket
 import sys
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from pathlib import Path
 
 import uvicorn
@@ -16,6 +16,7 @@ from fastapi.responses import (
 )
 from fastapi.staticfiles import StaticFiles
 
+from .api import mcp_server
 from .api.routes import browse, embeddings, images, search
 from .core.config import settings
 from .services import site_pages
@@ -68,7 +69,11 @@ async def lifespan(app):
     logger.info(f"Starting API server on {settings.host}:{settings.port}")
     logger.info(f"Debug mode: {settings.debug}")
 
-    yield
+    async with AsyncExitStack() as stack:
+        if settings.mcp:
+            await stack.enter_async_context(mcp_server.server.session_manager.run())
+            logger.info("Answering the Model Context Protocol at /mcp")
+        yield
 
 
 app = FastAPI(
@@ -116,6 +121,9 @@ app.include_router(search.router)
 app.include_router(browse.router)
 app.include_router(images.router)
 app.include_router(embeddings.router)
+
+if settings.mcp:
+    app.router.routes.extend(mcp_server.http_routes())
 
 
 @app.get("/api/health")

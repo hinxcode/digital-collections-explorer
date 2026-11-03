@@ -61,6 +61,9 @@ class Settings(BaseSettings):
 
     base_path: str = ""
 
+    mcp: bool = False
+    public_url: str = ""
+
 
 def normalize_base_path(value: str | None) -> str:
     """Turn "maps", "/maps/" or "" into "/maps" or "", the form routing expects"""
@@ -143,3 +146,5 @@ if os.environ.get("DCE_PORT"):
     settings.port = int(os.environ["DCE_PORT"])
 
 settings.base_path = normalize_base_path(os.environ.get("DCE_BASE_PATH"))
+settings.mcp = os.environ.get("DCE_MCP", "").lower() in ("1", "true", "yes")
+settings.public_url = os.environ.get("DCE_PUBLIC_URL", "").rstrip("/")
