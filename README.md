@@ -1,8 +1,6 @@
 # Digital Collections Explorer
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15744570.svg)](https://doi.org/10.5281/zenodo.15744570)
-[![Paper](https://img.shields.io/badge/paper-Computational%20Humanities%20Research-blue.svg)](https://doi.org/10.1017/chr.2025.10017)
-[![arXiv](https://img.shields.io/badge/arXiv-2507.00961-b31b1b.svg)](https://arxiv.org/abs/2507.00961)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15744570.svg)](https://doi.org/10.5281/zenodo.15744570) [![Paper](https://img.shields.io/badge/paper-Computational%20Humanities%20Research-blue.svg)](https://doi.org/10.1017/chr.2025.10017) [![arXiv](https://img.shields.io/badge/arXiv-2507.00961-b31b1b.svg)](https://arxiv.org/abs/2507.00961)
 
 **Digital Collections Explorer is an open-source search site for image collections that have little or no metadata.** A library, archive or museum points it at a folder, an S3 bucket or a manifest of images. Visitors can then search the collection in plain language ("a steam locomotive", "a handwritten letter with a red seal"), search with a picture, wander through it, and follow every image back to the institution's own record. No catalog, tags or OCR are needed: search compares the meaning of the words with the content of the images, using a multimodal embedding model (SigLIP by default, CLIP optionally).
 
@@ -100,9 +98,7 @@ The API server will start at http://localhost:8000
 
 ## Large, Remote, or Unsorted Collections
 
-The steps above expect your images in `data/raw`. When a collection is too large for
-your disk, lives in an S3 bucket, or has never been organized, use the tools below
-instead. They need no metadata and never store the original images.
+The steps above expect your images in `data/raw`. When a collection is too large for your disk, lives in an S3 bucket, or has never been organized, use the tools below instead. They need no metadata and never store the original images.
 
 ```bash
 # 1. See what the collection contains, what is possible, and what indexing will cost
@@ -117,14 +113,11 @@ python -m src.ingest /path/to/images --data-dir data/collections/my-collection
 DCE_DATA_DIR=data/collections/my-collection python -m src.backend.main
 ```
 
-If you use an AI coding agent that supports [Agent Skills](https://agentskills.io)
-(Claude Code, Codex, Gemini CLI, Cursor, and others), the `dce-setup` skill in
-`skills/` walks through these steps for you. Ask it to make your collection searchable.
+If you use an AI coding agent that supports [Agent Skills](https://agentskills.io) (Claude Code, Codex, Gemini CLI, Cursor, and others), the `dce-setup` skill in `skills/` walks through these steps for you. Ask it to make your collection searchable.
 
 ## Running with Docker
 
-Building the index is a one-off job. Serving searches is a long-running service that
-does not need a GPU. The image supports both, so they can run on different machines.
+Building the index is a one-off job. Serving searches is a long-running service that does not need a GPU. The image supports both, so they can run on different machines.
 
 ```bash
 docker build -t digital-collections-explorer .
@@ -151,36 +144,20 @@ COLLECTION=my-collection docker compose up serve
 Build options:
 
 - `--build-arg COLLECTION_TYPE=maps` selects the frontend (`photographs`, `maps`, `documents`).
-- `--build-arg TORCH_VARIANT=cu124` installs the CUDA build of PyTorch for indexing on a
-  GPU. The default is the much smaller CPU build, which is all that serving needs.
-- `--build-arg PRELOAD_MODEL=false` leaves the model out of the image. It is then
-  downloaded each time a container starts.
+- `--build-arg TORCH_VARIANT=cu124` installs the CUDA build of PyTorch for indexing on a GPU. The default is the much smaller CPU build, which is all that serving needs.
+- `--build-arg PRELOAD_MODEL=false` leaves the model out of the image. It is then downloaded each time a container starts.
 
 ## Describing Your Collection to Visitors
 
-The photographs site opens on a wall of images to wander through, suggests searches,
-shows each object once however many photos it has, and gives every image its own page
-with similar images and a link back to the institution's own record.
+The photographs site opens on a wall of images to wander through, suggests searches, shows each object once however many photos it has, and gives every image its own page with similar images and a link back to the institution's own record.
 
-Put a `collection.json` next to the index (in the folder you pass to `--data-dir`) to
-set the title, the introduction, the suggested searches, the license and the footer
-links. `collection.example.json` shows every field. All of them are optional. A
-suggested search is either the query itself or `{"query": "...", "label": "..."}`,
-whose label is shown beside it, for example to say how Auto reads it. The site
-reads the file on every visit, so a change shows up without a restart. For a deployed
-site, see `--collection-file` and `describe` below.
+Put a `collection.json` next to the index (in the folder you pass to `--data-dir`) to set the title, the introduction, the suggested searches, the license and the footer links. `collection.example.json` shows every field. All of them are optional. A suggested search is either the query itself or `{"query": "...", "label": "..."}`, whose label is shown beside it, for example to say how Auto reads it. The site reads the file on every visit, so a change shows up without a restart. For a deployed site, see `--collection-file` and `describe` below.
 
-The link back to the original record is taken from the catalog: a column named
-`source_url`, `guid`, `record_url`, `landing_page` or `permalink` that holds a web
-address. Images are grouped into objects by a column named `object_id`, `record_id`,
-`item_id` or `group_id`. Collections without a catalog still work: every image is
-then its own object and is shown as uncataloged.
+The link back to the original record is taken from the catalog: a column named `source_url`, `guid`, `record_url`, `landing_page` or `permalink` that holds a web address. Images are grouped into objects by a column named `object_id`, `record_id`, `item_id` or `group_id`. Collections without a catalog still work: every image is then its own object and is shown as uncataloged.
 
 ## Collections Split into Groups
 
-A collection built by your own pipeline can be split into groups, such as the museums
-of one institution, with a vector shard for each group. The site serves it from this
-layout and lets every search name the groups it covers:
+A collection built by your own pipeline can be split into groups, such as the museums of one institution, with a vector shard for each group. The site serves it from this layout and lets every search name the groups it covers:
 
 ```
 my-collection/
@@ -202,51 +179,21 @@ my-collection/
   related/                  thumbnails of related photos, relative to my-collection
 ```
 
-Each entry in `models` has a `key` (its folder under `vectors/`), a `type` (`clip`,
-`siglip` or `siglip2`), a `name`, a `revision` and its `dimensions`. The site searches
-with the model named by `default_model`, loading the recorded revision, so queries
-and stored vectors come from the same weights. Set `DCE_MODEL` to the key or name of
-another of its models to search with that one; the site refuses to start if the index
-holds no vectors from the model it would use. Images of the same record are shown as
-one object, and the record's `source_url` is the link back. `original` may be a web
-address, in which case `/static/<id>` sends the visitor there.
+Each entry in `models` has a `key` (its folder under `vectors/`), a `type` (`clip`, `siglip` or `siglip2`), a `name`, a `revision` and its `dimensions`. The site searches with the model named by `default_model`, loading the recorded revision, so queries and stored vectors come from the same weights. Set `DCE_MODEL` to the key or name of another of its models to search with that one; the site refuses to start if the index holds no vectors from the model it would use. Images of the same record are shown as one object, and the record's `source_url` is the link back. `original` may be a web address, in which case `/static/<id>` sends the visitor there.
 
-Searches, samples and similar images take `groups=nmah,saam`; leave it out to cover
-every group. Images in the chosen groups are ranked together exactly as one index
-would rank them. `/api/collection` lists the groups with their numbers of images and
-objects. The photographs site shows each image's group and offers a filter that keeps
-the chosen groups in the address, so a filtered search can be shared.
+Searches, samples and similar images take `groups=nmah,saam`; leave it out to cover every group. Images in the chosen groups are ranked together exactly as one index would rank them. `/api/collection` lists the groups with their numbers of images and objects. The photographs site shows each image's group and offers a filter that keeps the chosen groups in the address, so a filtered search can be shared.
 
-When `record_fields` is present, an item page lists its record's fields in their
-`position` order, with repeated labels grouped together, and `/api/items/<id>` returns
-them with the record's facets under `record`.
+When `record_fields` is present, an item page lists its record's fields in their `position` order, with repeated labels grouped together, and `/api/items/<id>` returns them with the record's facets under `record`.
 
-When `related_sources` is present, an item page also notes where else its record
-appears, such as the same object on Flickr Commons: one line per photo, those showing
-one of the record's images first, its title linking to it, followed by its faves and
-comments from the `counts` JSON.
-`/api/items/<id>` returns them under `record.related`, together with what the page
-leaves out: the photo's thumbnail, served from `/images/related/<source_id>`, its
-galleries, its tags from `related_tags` in `position` order, and its rights. Name each
-source for visitors in `collection.json`, for example
-`"sources": {"flickr": {"label": "Flickr Commons"}}`: the lines are headed "Also on
-Flickr Commons".
+When `related_sources` is present, an item page also notes where else its record appears, such as the same object on Flickr Commons: one line per photo, those showing one of the record's images first, its title linking to it, followed by its faves and comments from the `counts` JSON. `/api/items/<id>` returns them under `record.related`, together with what the page leaves out: the photo's thumbnail, served from `/images/related/<source_id>`, its galleries, its tags from `related_tags` in `position` order, and its rights. Name each source for visitors in `collection.json`, for example `"sources": {"flickr": {"label": "Flickr Commons"}}`: the lines are headed "Also on Flickr Commons".
 
 ## Searching by Appearance and by Catalog
 
-When a grouped collection's `metadata.sqlite` also holds `records_fts`, an FTS5 table
-with one row per record (`record_id` and text columns such as `title`, `names`, `dates`,
-`places`, `topics`, `object_types`, `notes`, `physical` and `identifiers`), and
-`entity_vocab(term, field, record_count)`, the collection's names, places, topics and
-object types, text search runs two channels and fuses them:
+When a grouped collection's `metadata.sqlite` also holds `records_fts`, an FTS5 table with one row per record (`record_id` and text columns such as `title`, `names`, `dates`, `places`, `topics`, `object_types`, `notes`, `physical` and `identifiers`), and `entity_vocab(term, field, record_count)`, the collection's names, places, topics and object types, text search runs two channels and fuses them:
 
 - **Visual:** the model compares the query with every image, as before.
-- **Keyword:** SQLite full-text search ranked by BM25, with titles, names and catalog
-  numbers weighing most. Every meaningful word must match, small words such as "a" or
-  "of" are not required, and a word also matches its plural or singular when the
-  catalog uses that form.
-- **Fusion:** reciprocal rank fusion, with a weight for each channel and a tunable
-  constant (60 by default). Each object is shown once.
+- **Keyword:** SQLite full-text search ranked by BM25, with titles, names and catalog numbers weighing most. Every meaningful word must match, small words such as "a" or "of" are not required, and a word also matches its plural or singular when the catalog uses that form.
+- **Fusion:** reciprocal rank fusion, with a weight for each channel and a tunable constant (60 by default). Each object is shown once.
 
 With `mode=auto`, the default, the site reads the query first and weighs the channels:
 
@@ -261,27 +208,13 @@ With `mode=auto`, the default, the site reads the query first and weighs the cha
 | a catalog term inside a longer query, such as `portrait of abraham lincoln` | that term | 1, 1 |
 | anything else | description | 1, 0.3 |
 
-`mode=visual`, `mode=keyword` and `mode=hybrid` (equal weights) decide for it. A word
-that no record uses is corrected to a close, common word from the catalog; the response
-says so, and `correct_spelling=false` searches the words as typed. Every result carries
-its rank in each channel, the record fields that matched and an explanation such as
-"Matches the title and name", or "Looks similar" when only its appearance brought it
-there. The response's `search` tells how the query was
-read and, when the catalog matched nothing, why: "No records mention both “quilt” and
-“airplane”; showing visually similar items".
+`mode=visual`, `mode=keyword` and `mode=hybrid` (equal weights) decide for it. A word that no record uses is corrected to a close, common word from the catalog; the response says so, and `correct_spelling=false` searches the words as typed. Every result carries its rank in each channel, the record fields that matched and an explanation such as "Matches the title and name", or "Looks similar" when only its appearance brought it there. The response's `search` tells how the query was read and, when the catalog matched nothing, why: "No records mention both “quilt” and “airplane”; showing visually similar items".
 
-The photographs site keeps this out of the way of the pictures. A switch under the search
-bar offers Auto, Appearance and Catalog, so searching otherwise is one click. Above the
-results appear only a spelling correction, with "Search instead for", how Auto read the
-query ("Read as a name", saying more when pointed at; a plain description gets no remark),
-and why the catalog found nothing. Pointing at a result shows its
-title, its group and why it is there. In Catalog mode the group filter shows how many
-matches each group holds. The choices are kept in the address (`mode=visual`, `exact=1`).
+The photographs site keeps this out of the way of the pictures. A switch under the search bar offers Auto, Appearance and Catalog, so searching otherwise is one click. Above the results appear only a spelling correction, with "Search instead for", how Auto read the query ("Read as a name", saying more when pointed at; a plain description gets no remark), and why the catalog found nothing. Pointing at a result shows its title, its group and why it is there. In Catalog mode the group filter shows how many matches each group holds. The choices are kept in the address (`mode=visual`, `exact=1`).
 
 ## Limits That Protect a Public Site
 
-Searching is the only expensive thing the site does, so it is the only thing that is
-limited. Browsing and viewing images are not. The defaults suit a small machine:
+Searching is the only expensive thing the site does, so it is the only thing that is limited. Browsing and viewing images are not. The defaults suit a small machine:
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
@@ -290,8 +223,7 @@ limited. Browsing and viewing images are not. The defaults suit a small machine:
 | `concurrent_searches` | 2 | Searches that use the model at once. Others wait up to 15 seconds, then are asked to try again |
 | `proxy_hops` | 0 | Proxies in front of the site that add the visitor's address to `X-Forwarded-For`. Leave at 0 unless there is one, or visitors could pose as each other |
 
-A visitor who is turned away is told why, in plain words. To change a limit, put it in
-`settings.json` next to the index, or run one of these. The site picks it up without a restart.
+A visitor who is turned away is told why, in plain words. To change a limit, put it in `settings.json` next to the index, or run one of these. The site picks it up without a restart.
 
 ```bash
 DCE_DATA_DIR=data/collections/my-collection python -m src.backend.core.site_settings max_upload_mb=20
@@ -301,10 +233,7 @@ deploy/aws/configure.sh my-collection --set max_upload_mb=20
 
 ## MCP Server
 
-Set `DCE_MCP=1` and the site also answers the
-[Model Context Protocol](https://modelcontextprotocol.io) at `/mcp`, so an AI assistant
-such as Claude, ChatGPT or an editor's agent can search the collection itself. The
-endpoint is stateless, needs no account and only reads. It offers five tools:
+Set `DCE_MCP=1` and the site also answers the [Model Context Protocol](https://modelcontextprotocol.io) at `/mcp`, so an AI assistant such as Claude, ChatGPT or an editor's agent can search the collection itself. The endpoint is stateless, needs no account and only reads. It offers five tools:
 
 | Tool | What it does |
 | --- | --- |
@@ -314,29 +243,20 @@ endpoint is stateless, needs no account and only reads. It offers five tools:
 | `search_by_image` | Objects that look like a collection image, a crop of one (a face on a stamp, say), or an image the assistant sends as base64 |
 | `get_object` | One object's record, its images, the link to the institution's record, and where else it appears |
 
-Every result links to its page on the site and to its image, and says why it was found,
-how alike it is to the query, and which catalog fields matched. Searches count against the
-same limits as visitors' searches, and an image sent as base64 against the upload limit.
-The endpoint never fetches a web address it is given. Links are built from the address the assistant used;
-behind a proxy or CDN that rewrites it, set `DCE_PUBLIC_URL` to the address visitors use,
-such as `https://collection.example.org`.
+Every result links to its page on the site and to its image, and says why it was found, how alike it is to the query, and which catalog fields matched. Searches count against the same limits as visitors' searches, and an image sent as base64 against the upload limit. The endpoint never fetches a web address it is given. Links are built from the address the assistant used; behind a proxy or CDN that rewrites it, set `DCE_PUBLIC_URL` to the address visitors use, such as `https://collection.example.org`.
 
 ```bash
 DCE_MCP=1 DCE_DATA_DIR=data/collections/my-collection python -m src.backend.main
 claude mcp add --transport http my-collection http://localhost:8000/mcp
 ```
 
-Assistants that call the endpoint from the cloud, such as Claude's custom connectors,
-need a public HTTPS address; on AWS, deploy with Public HTTPS.
+Assistants that call the endpoint from the cloud, such as Claude's custom connectors, need a public HTTPS address; on AWS, deploy with Public HTTPS.
 
 ## Deploying to a Server or to AWS
 
 ### Any Linux machine
 
-`deploy/bootstrap.sh` turns a Linux machine into a collection site with one command.
-It works the same on a cloud VM, a server in your own machine room, or a laptop. It
-installs Docker if needed, builds the index once, then serves the site and keeps it
-running across reboots.
+`deploy/bootstrap.sh` turns a Linux machine into a collection site with one command. It works the same on a cloud VM, a server in your own machine room, or a laptop. It installs Docker if needed, builds the index once, then serves the site and keeps it running across reboots.
 
 ```bash
 sudo deploy/bootstrap.sh install --name my-collection --source /path/to/images
@@ -346,9 +266,7 @@ sudo deploy/bootstrap.sh uninstall --name my-collection   # add --keep-data to k
 
 Indexing can be interrupted. It continues where it left off the next time the machine starts.
 
-Add `--collection-file collection.json` to `install` to give the site its title,
-introduction and suggested searches from the start. To change them later, while the
-site keeps running:
+Add `--collection-file collection.json` to `install` to give the site its title, introduction and suggested searches from the start. To change them later, while the site keeps running:
 
 ```bash
 sudo deploy/bootstrap.sh describe --name my-collection --collection-file collection.json
@@ -356,16 +274,11 @@ sudo deploy/bootstrap.sh describe --name my-collection --collection-file collect
 
 ### Under a path on an existing website
 
-A site can also live at a path such as `https://library.example.org/maps/`. Set
-`DCE_BASE_PATH`, or `--base-path` with the bootstrap script, or `BASE_PATH` with Docker
-Compose. The proxy configuration and the `robots.txt` to add at the root of the domain are
-covered in the [documentation](https://digital-collections-explorer.com/docs/deploy/under-a-path/).
+A site can also live at a path such as `https://library.example.org/maps/`. Set `DCE_BASE_PATH`, or `--base-path` with the bootstrap script, or `BASE_PATH` with Docker Compose. The proxy configuration and the `robots.txt` to add at the root of the domain are covered in the [documentation](https://digital-collections-explorer.com/docs/deploy/under-a-path/).
 
 ### AWS
 
-`deploy/aws/` creates one small EC2 machine that runs the same bootstrap script. Before
-creating anything it lists what it will create and looks up the current AWS prices,
-and it does nothing until you type `yes`.
+`deploy/aws/` creates one small EC2 machine that runs the same bootstrap script. Before creating anything it lists what it will create and looks up the current AWS prices, and it does nothing until you type `yes`.
 
 ```bash
 deploy/aws/deploy.sh my-collection --source s3://bucket/prefix --anonymous
@@ -373,13 +286,9 @@ deploy/aws/status.sh my-collection
 deploy/aws/destroy.sh my-collection     # removes everything it created
 ```
 
-To change a deployment, run `deploy.sh` again with the same name and only the options
-you want to change. Everything you leave out keeps its current value, and the script
-lists what will change before it asks you to confirm.
+To change a deployment, run `deploy.sh` again with the same name and only the options you want to change. Everything you leave out keeps its current value, and the script lists what will change before it asks you to confirm.
 
-Indexing is the only heavy work, so it pays to index on a large machine and serve from a
-small one. Changing `--instance-type` restarts the machine as the new type and keeps its
-index and its address.
+Indexing is the only heavy work, so it pays to index on a large machine and serve from a small one. Changing `--instance-type` restarts the machine as the new type and keeps its index and its address.
 
 ```bash
 deploy/aws/deploy.sh my-collection --source s3://bucket/prefix --anonymous --instance-type c7i.2xlarge
@@ -387,33 +296,17 @@ deploy/aws/deploy.sh my-collection --source s3://bucket/prefix --anonymous --ins
 deploy/aws/deploy.sh my-collection --instance-type t3.medium
 ```
 
-The script never lets an update replace the machine, which would delete the index: it
-keeps the machine's operating system image fixed and refuses to change the disk size.
-It also refuses to change the options that only matter when a machine is first created
-(`--source`, `--from`, `--fetch-via`, `--anonymous`, `--limit`, `--image`,
-`--bootstrap-url`), because that would restart the machine and change nothing. To switch
-a running site to another version, use `update.sh` below.
+The script never lets an update replace the machine, which would delete the index: it keeps the machine's operating system image fixed and refuses to change the disk size. It also refuses to change the options that only matter when a machine is first created (`--source`, `--from`, `--fetch-via`, `--anonymous`, `--limit`, `--image`, `--bootstrap-url`), because that would restart the machine and change nothing. To switch a running site to another version, use `update.sh` below.
 
-`status.sh` reports how the run went and what it cost: when indexing started and
-finished, how long it took, images per second, how much was read from the source, the
-files that failed, the cost of the run at current AWS prices, the cost per 1,000 images,
-and what the machine costs per month from now on. It warns when a large machine is
-still running after indexing has finished. Locally, `python -m src.ingest --report
---data-dir ...` prints the same report, also for a run that finished long ago.
+`status.sh` reports how the run went and what it cost: when indexing started and finished, how long it took, images per second, how much was read from the source, the files that failed, the cost of the run at current AWS prices, the cost per 1,000 images, and what the machine costs per month from now on. It warns when a large machine is still running after indexing has finished. Locally, `python -m src.ingest --report --data-dir ...` prints the same report, also for a run that finished long ago.
 
-`deploy.sh` takes the same `--collection-file collection.json`. To change the
-description of a site that is already deployed, without touching the machine or the index:
+`deploy.sh` takes the same `--collection-file collection.json`. To change the description of a site that is already deployed, without touching the machine or the index:
 
 ```bash
 deploy/aws/describe.sh my-collection --file collection.json
 ```
 
-To open the site to the public, add `--https`. The site then gets an `https://` address
-from CloudFront, with no domain name or certificate to arrange, and the machine stops
-accepting traffic from anywhere else. CloudFront also keeps copies of the images, which
-takes most of the load off a small machine. It is free up to 1 TB and 10 million requests
-a month. `--no-https` turns it off again. `--https` cannot be combined with
-`--allowed-cidr`, which is for sites that should stay internal.
+To open the site to the public, add `--https`. The site then gets an `https://` address from CloudFront, with no domain name or certificate to arrange, and the machine stops accepting traffic from anywhere else. CloudFront also keeps copies of the images, which takes most of the load off a small machine. It is free up to 1 TB and 10 million requests a month. `--no-https` turns it off again. `--https` cannot be combined with `--allowed-cidr`, which is for sites that should stay internal.
 
 ```bash
 deploy/aws/deploy.sh my-collection --https
@@ -425,38 +318,25 @@ To move a deployed site to a newer version without indexing again:
 deploy/aws/update.sh my-collection --image ghcr.io/hinxcode/digital-collections-explorer:next
 ```
 
-A collection prepared by your own pipeline, such as one split into groups (see above),
-needs no indexing on the machine at all. Copy the folder to a bucket in the region where
-the machine will run. A new deployment then starts from it with `--from` in place of
-`--source`: the machine is allowed to read that bucket, copies the folder, and opens the
-site.
+A collection prepared by your own pipeline, such as one split into groups (see above), needs no indexing on the machine at all. Copy the folder to a bucket in the region where the machine will run. A new deployment then starts from it with `--from` in place of `--source`: the machine is allowed to read that bucket, copies the folder, and opens the site.
 
 ```bash
 aws s3 sync my-collection s3://my-bucket/my-collection
 deploy/aws/deploy.sh my-collection --from s3://my-bucket/my-collection
 ```
 
-To replace the data of a site that is already running, let its machine read the bucket
-and import the folder. The site keeps serving its current data until the copy is
-complete, keeps its limits, and keeps the old data in a folder next to the new one until
-you delete it. Either way, `status.sh` names the folder the site was copied from.
+To replace the data of a site that is already running, let its machine read the bucket and import the folder. The site keeps serving its current data until the copy is complete, keeps its limits, and keeps the old data in a folder next to the new one until you delete it. Either way, `status.sh` names the folder the site was copied from.
 
 ```bash
 deploy/aws/deploy.sh my-collection --source-bucket my-bucket
 deploy/aws/import.sh my-collection --from s3://my-bucket/my-collection
 ```
 
-On any other machine, `sudo deploy/bootstrap.sh install --name my-collection --from
-/path/to/my-collection` starts a site from a local folder, and `import` with the same
-options replaces the data of one that is running.
+On any other machine, `sudo deploy/bootstrap.sh install --name my-collection --from /path/to/my-collection` starts a site from a local folder, and `import` with the same options replaces the data of one that is running.
 
-The images must already be reachable from the cloud (an `s3://` or `https://` address).
-There is no SSH: administrators connect through AWS Session Manager. Pass `--budget` and
-`--email` to be warned when the monthly bill passes an amount you choose.
+The images must already be reachable from the cloud (an `s3://` or `https://` address). There is no SSH: administrators connect through AWS Session Manager. Pass `--budget` and `--email` to be warned when the monthly bill passes an amount you choose.
 
-The same template (`deploy/aws/template.yaml`) can be launched from the AWS console.
-Other clouds are not covered yet. The bootstrap script is cloud-neutral, so supporting
-one means writing only the small part that creates a machine and runs it.
+The same template (`deploy/aws/template.yaml`) can be launched from the AWS console. Other clouds are not covered yet. The bootstrap script is cloud-neutral, so supporting one means writing only the small part that creates a machine and runs it.
 
 ## Model Configuration
 
@@ -476,16 +356,11 @@ Configure the model in `config.json`:
 }
 ```
 
-In our tests on a museum collection it found clearly better matches than CLIP for
-English queries, and it stays usable for queries in other languages, where CLIP mostly
-fails. Search works best in English. It indexes about three times slower than CLIP and
-its index is about 1.5 times larger.
+In our tests on a museum collection it found clearly better matches than CLIP for English queries, and it stays usable for queries in other languages, where CLIP mostly fails. Search works best in English. It indexes about three times slower than CLIP and its index is about 1.5 times larger.
 
 ### Using SigLIP 2
 
-[SigLIP 2](https://arxiv.org/abs/2502.14786) is the second version of SigLIP. It needs
-`transformers` 4.50 or later. Queries are lowercased and padded to 64 tokens, the way
-the model was trained.
+[SigLIP 2](https://arxiv.org/abs/2502.14786) is the second version of SigLIP. It needs `transformers` 4.50 or later. Queries are lowercased and padded to 64 tokens, the way the model was trained.
 
 ```json
 {
@@ -511,9 +386,7 @@ the model was trained.
 
 ### Pinning the model version
 
-Any of the models above can take a `model_revision`: the commit of the model on Hugging
-Face. The index and the searches then keep using the same weights, even after the
-model is updated there.
+Any of the models above can take a `model_revision`: the commit of the model on Hugging Face. The index and the searches then keep using the same weights, even after the model is updated there.
 
 ```json
 {
@@ -525,14 +398,11 @@ model is updated there.
 }
 ```
 
-A collection split into groups records the models it holds and their revisions in
-`index_info.json`, so it needs none of this: see below.
+A collection split into groups records the models it holds and their revisions in `index_info.json`, so it needs none of this: see below.
 
 ### Changing the model
 
-An index can only be searched with the model that built it. The server checks this
-when it starts and explains what to do if they differ. After changing the model,
-build a new index.
+An index can only be searched with the model that built it. The server checks this when it starts and explains what to do if they differ. After changing the model, build a new index.
 
 **Device options:**
 
