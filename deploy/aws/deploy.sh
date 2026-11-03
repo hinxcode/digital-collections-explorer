@@ -24,6 +24,9 @@ IMAGE=""
 BOOTSTRAP_URL=""
 COLLECTION_FILE=""
 HTTPS=""
+DOMAIN=""
+CERTIFICATE_ARN=""
+NO_DOMAIN="false"
 ASSUME_YES="false"
 
 usage() {
@@ -49,6 +52,11 @@ Everything you leave out keeps the value the deployment already has.
   --allowed-cidr CIDR   who may open the site (default: everyone)
   --https               open the site to everyone over HTTPS, through CloudFront
   --no-https            go back to plain HTTP on the machine's own address
+  --domain NAME         with --https, also serve the site at a domain of your own, such as
+                        collection.example.org. Needs --certificate-arn
+  --certificate-arn ARN an issued AWS Certificate Manager certificate for that domain, in
+                        us-east-1, where CloudFront looks for certificates
+  --no-domain           serve the site at its CloudFront address only
   --budget USD          email an alert when the monthly bill passes this amount
   --email ADDRESS       where to send that alert
   --image IMAGE         container image to install. Later, switch versions with update.sh
@@ -78,6 +86,9 @@ while [ $# -gt 0 ]; do
     --allowed-cidr) ALLOWED_CIDR="$2"; shift 2 ;;
     --https) HTTPS="true"; shift ;;
     --no-https) HTTPS="false"; shift ;;
+    --domain) DOMAIN="$2"; shift 2 ;;
+    --certificate-arn) CERTIFICATE_ARN="$2"; shift 2 ;;
+    --no-domain) NO_DOMAIN="true"; shift ;;
     --budget) BUDGET="$2"; shift 2 ;;
     --email) EMAIL="$2"; shift 2 ;;
     --image) IMAGE="$2"; shift 2 ;;
@@ -162,6 +173,13 @@ if [ -n "$EXISTING_INSTANCE" ] && [ "$EXISTING_INSTANCE" != "None" ]; then
     keep BUDGET MonthlyBudgetUsd "Spending alert (USD per month)"
     keep EMAIL BudgetEmail "Spending alert address"
     keep HTTPS PublicHttps "Public HTTPS"
+    if [ "$NO_DOMAIN" = "true" ]; then
+        CURRENT_DOMAIN="$(current_parameter Domain)"
+        [ -z "$CURRENT_DOMAIN" ] || CHANGES+=("Domain of your own: $CURRENT_DOMAIN -> none")
+    else
+        keep DOMAIN Domain "Domain of your own"
+        keep CERTIFICATE_ARN CertificateArn "Certificate for the domain"
+    fi
     [ "$HTTPS" = "true" ] || keep ALLOWED_CIDR AllowedCidr "Who may open the site"
 else
     IS_UPDATE="false"
@@ -199,6 +217,39 @@ ami-*) ;;
 esac
 
 [ -n "$HTTPS" ] || HTTPS="false"
+if [ "$NO_DOMAIN" = "true" ]; then
+    [ -z "$DOMAIN$CERTIFICATE_ARN" ] || fail "use --domain or --no-domain, not both. Nothing was changed."
+    DOMAIN=""
+    CERTIFICATE_ARN=""
+fi
+if [ -n "$DOMAIN" ]; then
+    [ "$HTTPS" = "true" ] ||
+        fail "a domain of your own is served through CloudFront, so it needs --https. To stop serving $DOMAIN, add --no-domain. Nothing was changed."
+    [[ "$DOMAIN" =~ ^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$ ]] ||
+        fail "--domain must be a domain name in lowercase, such as collection.example.org. Nothing was changed."
+    [ -n "$CERTIFICATE_ARN" ] ||
+        fail "--domain needs --certificate-arn: a certificate for $DOMAIN in AWS Certificate Manager, in us-east-1, where CloudFront looks for certificates. Request one with
+  aws acm request-certificate --region us-east-1 --domain-name $DOMAIN --validation-method DNS
+add the DNS record that 'aws acm describe-certificate --region us-east-1 --certificate-arn ARN' shows, and run this again once the certificate is issued. Nothing was changed."
+    [[ "$CERTIFICATE_ARN" =~ ^arn:aws:acm:us-east-1:[0-9]{12}:certificate/[0-9a-f-]+$ ]] ||
+        fail "--certificate-arn must name a certificate in us-east-1, where CloudFront looks for certificates, whatever region the site runs in. Nothing was changed."
+    CERTIFICATE="$(aws acm describe-certificate --region us-east-1 --certificate-arn "$CERTIFICATE_ARN" \
+        --query "[Certificate.Status, join(' ', Certificate.SubjectAlternativeNames)]" --output text)" ||
+        fail "could not read the certificate $CERTIFICATE_ARN. Nothing was changed."
+    read -r CERTIFICATE_STATUS CERTIFICATE_NAMES <<<"$CERTIFICATE"
+    read -r -a NAMES <<<"$CERTIFICATE_NAMES"
+    [ "$CERTIFICATE_STATUS" = "ISSUED" ] ||
+        fail "the certificate is $CERTIFICATE_STATUS, not ISSUED. Add the DNS record that 'aws acm describe-certificate --region us-east-1 --certificate-arn $CERTIFICATE_ARN' shows, and run this again once it is issued. Nothing was changed."
+    COVERED="false"
+    for name in "${NAMES[@]}"; do
+        [ "$name" = "$DOMAIN" ] && COVERED="true"
+        [ "$name" = "*.${DOMAIN#*.}" ] && COVERED="true"
+    done
+    [ "$COVERED" = "true" ] ||
+        fail "the certificate covers $CERTIFICATE_NAMES, not $DOMAIN. Nothing was changed."
+elif [ -n "$CERTIFICATE_ARN" ]; then
+    fail "--certificate-arn only applies together with --domain. Nothing was changed."
+fi
 CLOUDFRONT_PREFIX_LIST=""
 if [ "$HTTPS" = "true" ]; then
     [ -z "$ALLOWED_CIDR" ] || [ "$ALLOWED_CIDR" = "0.0.0.0/0" ] ||
@@ -247,7 +298,11 @@ echo "  1 disk of $DISK_GIB GB, deleted together with the machine"
 echo "  1 fixed public address"
 if [ "$HTTPS" = "true" ]; then
     echo "  1 firewall rule allowing web traffic (port 80) from CloudFront only"
-    echo "  1 CloudFront distribution that gives the site a public https:// address"
+    if [ -n "$DOMAIN" ]; then
+        echo "  1 CloudFront distribution that serves the site at https://$DOMAIN and at its own https:// address"
+    else
+        echo "  1 CloudFront distribution that gives the site a public https:// address"
+    fi
 else
     echo "  1 firewall rule allowing web traffic (port 80) from $ALLOWED_CIDR"
 fi
@@ -284,6 +339,7 @@ overrides=(
     "InstanceType=$INSTANCE_TYPE" "DiskSizeGiB=$DISK_GIB" "AllowedCidr=$ALLOWED_CIDR"
     "MonthlyBudgetUsd=$BUDGET" "BudgetEmail=$EMAIL" "MachineImageId=$MACHINE_IMAGE"
     "PublicHttps=$HTTPS" "CloudFrontPrefixList=$CLOUDFRONT_PREFIX_LIST"
+    "Domain=$DOMAIN" "CertificateArn=$CERTIFICATE_ARN"
 )
 [ -n "$IMAGE" ] && overrides+=("Image=$IMAGE")
 [ -n "$BOOTSTRAP_URL" ] && overrides+=("BootstrapUrl=$BOOTSTRAP_URL")
@@ -309,6 +365,14 @@ else
     echo "The machine is now installing and indexing. The site opens when indexing finishes."
 fi
 echo "Follow progress with: deploy/aws/status.sh $NAME --region $REGION"
+
+if [ -n "$DOMAIN" ]; then
+    TARGET="$(aws cloudformation describe-stacks --region "$REGION" --stack-name "$STACK" \
+        --query "Stacks[0].Outputs[?OutputKey=='CloudFrontAddress'].OutputValue" --output text)" || TARGET=""
+    echo
+    echo "Point $DOMAIN at ${TARGET:-the CloudFrontAddress above} with a CNAME record where your domain's DNS is kept"
+    echo "(on Route 53, an alias record also works for a root domain). Until then, the site answers at https://${TARGET:-its CloudFront address}."
+fi
 
 if [ "$HTTPS" = "true" ] || [ "$CURRENT_HTTPS" = "true" ]; then
     echo

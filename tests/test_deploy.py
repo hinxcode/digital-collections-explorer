@@ -94,7 +94,11 @@ case "$*" in
     printf 'BudgetEmail\tcurator@example.org\n'
     printf 'Image\texample/image:1\n'
     printf 'BootstrapUrl\thttps://example.org/bootstrap.sh\n'
-    printf 'PublicHttps\t%s\n' "${FAKE_HTTPS:-false}" ;;
+    printf 'PublicHttps\t%s\n' "${FAKE_HTTPS:-false}"
+    printf 'Domain\t%s\n' "$FAKE_DOMAIN"
+    printf 'CertificateArn\t%s\n' "$FAKE_CERTIFICATE" ;;
+*"acm describe-certificate"*)
+    printf '%s\t%s\n' "$FAKE_CERTIFICATE_STATUS" "$FAKE_CERTIFICATE_NAMES" ;;
 *"describe-managed-prefix-lists"*) echo "pl-0cloudfront" ;;
 *"describe-instances"*"InstanceType"*) echo "c7i.2xlarge" ;;
 *"describe-instances"*) echo "ami-0existing111" ;;
@@ -155,6 +159,10 @@ def fake_deploy(tmp_path):
         served_over_https=False,
         source=("--source", "s3://bucket/images"),
         prepared_from="",
+        domain="",
+        certificate="",
+        certificate_status="ISSUED",
+        certificate_names="collection.example.org",
     ):
         import os
 
@@ -171,6 +179,10 @@ def fake_deploy(tmp_path):
             "FAKE_NOT_READY_FOR": str(not_ready_for),
             "FAKE_HTTPS": "true" if served_over_https else "false",
             "FAKE_PREPARED_FROM": prepared_from,
+            "FAKE_DOMAIN": domain,
+            "FAKE_CERTIFICATE": certificate,
+            "FAKE_CERTIFICATE_STATUS": certificate_status,
+            "FAKE_CERTIFICATE_NAMES": certificate_names,
         }
         if script != "deploy.sh":
             command = ["bash", str(scripts / script), "demo", *extra]
@@ -209,6 +221,86 @@ def test_update_refuses_to_change_the_disk_because_that_deletes_the_index(fake_d
     assert result.returncode != 0
     assert deploys == []
     assert "delete its index" in result.stderr
+
+
+CERTIFICATE = "arn:aws:acm:us-east-1:123456789012:certificate/0a1b2c3d-4e5f-6789-abcd-ef0123456789"
+DOMAIN = ("--domain", "collection.example.org", "--certificate-arn", CERTIFICATE)
+
+
+def test_a_domain_of_your_own_is_served_through_cloudfront_with_its_certificate(
+    fake_deploy,
+):
+    result, deploys = fake_deploy(False, "--https", *DOMAIN)
+    assert result.returncode == 0, result.stderr
+    assert "Domain=collection.example.org" in deploys[0]
+    assert f"CertificateArn={CERTIFICATE}" in deploys[0]
+    assert "https://collection.example.org" in result.stdout
+    assert "CNAME record" in result.stdout
+
+
+def test_a_wildcard_certificate_covers_a_domain_one_level_below(fake_deploy):
+    result, deploys = fake_deploy(
+        False, "--https", *DOMAIN, certificate_names="*.example.org example.org"
+    )
+    assert result.returncode == 0, result.stderr
+    assert "Domain=collection.example.org" in deploys[0]
+
+
+@pytest.mark.parametrize(
+    "extra, certificate, said",
+    [
+        (DOMAIN, {}, "needs --https"),
+        (("--https", "--domain", "collection.example.org"), {}, "request-certificate"),
+        (
+            (
+                "--https",
+                "--domain",
+                "collection.example.org",
+                "--certificate-arn",
+                CERTIFICATE.replace("us-east-1", "us-west-2"),
+            ),
+            {},
+            "us-east-1",
+        ),
+        (
+            ("--https", *DOMAIN),
+            {"certificate_status": "PENDING_VALIDATION"},
+            "PENDING_VALIDATION",
+        ),
+        (
+            ("--https", *DOMAIN),
+            {"certificate_names": "other.example.org"},
+            "not collection.example.org",
+        ),
+        (("--https", "--certificate-arn", CERTIFICATE), {}, "only applies together"),
+        (("--https", *DOMAIN, "--no-domain"), {}, "not both"),
+    ],
+)
+def test_a_domain_is_refused_until_it_can_actually_be_served(
+    fake_deploy, extra, certificate, said
+):
+    result, deploys = fake_deploy(False, *extra, **certificate)
+    assert result.returncode != 0
+    assert deploys == []
+    assert said in result.stderr
+
+
+def test_an_update_keeps_the_domain_until_told_to_drop_it(fake_deploy):
+    current = {
+        "served_over_https": True,
+        "domain": "collection.example.org",
+        "certificate": CERTIFICATE,
+    }
+    result, deploys = fake_deploy(True, "--instance-type", "t3.large", **current)
+    assert result.returncode == 0, result.stderr
+    assert "Domain=collection.example.org" in deploys[0]
+    result, deploys = fake_deploy(True, "--no-domain", **current)
+    assert result.returncode == 0, result.stderr
+    assert "Domain= " in deploys[0] + " "
+    assert "collection.example.org -> none" in result.stdout
+    result, deploys = fake_deploy(True, "--no-https", **current)
+    assert result.returncode != 0
+    assert "--no-domain" in result.stderr
 
 
 def test_script_survives_being_saved_while_it_waits_for_aws(fake_deploy):
