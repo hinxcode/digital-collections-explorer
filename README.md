@@ -185,6 +185,8 @@ Searches, samples and similar images take `groups=nmah,saam`; leave it out to co
 
 When `record_fields` is present, an item page lists its record's fields in their `position` order, with repeated labels grouped together, and `/api/items/<id>` returns them with the record's facets under `record`.
 
+When `record_facets` is present, searches, samples and similar images can also keep only objects whose record holds some values: `object_type`, `place`, `culture`, `topic` and `name`, each repeated to accept any of several (`place=Ohio&place=England`), and `year_from` and `year_to`, read against the `date` facet. Case does not matter, every category asked for must match, and images without a record are left out. Dates count as the catalog files them: a decade such as `1860s`, a span such as `1914-1918`, or a year; `1000s` to `1400s` are centuries. An object a catalog dates only by century but files under one decade, as the Smithsonian files both the 18th and the 19th century under `1800s`, counts as that decade. Unlike a field term in the query, such as `date:1860s`, which leaves only the keyword channel, these filters hold for both channels, so they also narrow a search by appearance. `/api/categories/<category>` lists the values of one category, `date` included, the most common first with how many records hold each, and `contains=` narrows the list. `/api/collection` says whether the filters are available as `catalog_filters`. The photographs site does not offer them yet.
+
 When `related_sources` is present, an item page also notes where else its record appears, such as the same object on Flickr Commons: one line per photo, those showing one of the record's images first, its title linking to it, followed by its faves and comments from the `counts` JSON. `/api/items/<id>` returns them under `record.related`, together with what the page leaves out: the photo's thumbnail, served from `/images/related/<source_id>`, its galleries, its tags from `related_tags` in `position` order, and its rights. Name each source for visitors in `collection.json`, for example `"sources": {"flickr": {"label": "Flickr Commons"}}`: the lines are headed "Also on Flickr Commons".
 
 ## Searching by Appearance and by Catalog
@@ -233,15 +235,18 @@ deploy/aws/configure.sh my-collection --set max_upload_mb=20
 
 ## MCP Server
 
-Set `DCE_MCP=1` and the site also answers the [Model Context Protocol](https://modelcontextprotocol.io) at `/mcp`, so an AI assistant such as Claude, ChatGPT or an editor's agent can search the collection itself. The endpoint is stateless, needs no account and only reads. It offers five tools:
+Set `DCE_MCP=1` and the site also answers the [Model Context Protocol](https://modelcontextprotocol.io) at `/mcp`, so an AI assistant such as Claude, ChatGPT or an editor's agent can search the collection itself. The endpoint is stateless, needs no account and only reads. It offers six tools:
 
 | Tool | What it does |
 | --- | --- |
 | `describe_collection` | The collection's title, groups and their sizes, license, and suggested searches |
-| `search_collection` | The site's search, in Auto, Appearance or Catalog mode, for some groups, with or without images that have no record; up to 20 objects, each with why it was found |
-| `find_similar` | Objects whose images look most like one object, in some groups or in all |
+| `search_collection` | The site's search, in Auto, Appearance or Catalog mode, for some groups or catalog values, with or without images that have no record; up to 20 objects, each with why it was found |
+| `find_similar` | Objects whose images look most like one object, in some groups or catalog values, or in all |
 | `search_by_image` | Objects that look like a collection image, a crop of one (a face on a stamp, say), or an image the assistant sends as base64 |
+| `list_catalog_values` | The values the catalog uses for a kind of object, place, culture, topic, name or date, to filter by |
 | `get_object` | One object's record, its images, the link to the institution's record, and where else it appears |
+
+The three search tools take `catalog`, the filters of [Collections Split into Groups](#collections-split-into-groups), with values spelled as `list_catalog_values` gives them. The server's instructions tell the assistant to use it for a period, kind, place, culture, topic or person, and that a field term such as `date:1860s` in the query searches the catalog text alone, so pictures that only look right never come back.
 
 Hosts that support [MCP Apps](https://modelcontextprotocol.io/seps/1865-mcp-apps-interactive-user-interfaces-for-mcp) show the results of a search as an image wall: each picture beside its own title, opening the object's page when clicked, with "More like this" to follow similar images. The wall loads pictures only from `DCE_PUBLIC_URL`, so set it for the pictures to appear. Every result links to its page on the site and to its image, and says why it was found, how alike it is to the query, and which catalog fields matched. Searches count against the same limits as visitors' searches, and an image sent as base64 against the upload limit. The endpoint never fetches a web address it is given. Links are built from the address the assistant used; behind a proxy or CDN that rewrites it, set `DCE_PUBLIC_URL` to the address visitors use, such as `https://collection.example.org`, with the path if the site lives under one.
 
