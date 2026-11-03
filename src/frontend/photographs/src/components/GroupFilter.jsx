@@ -81,7 +81,7 @@ function GroupFilter({
           onClick={() => choose(every)}
           disabled={showsAll}
         >
-          Show all
+          Select all
         </button>
       </div>
     </details>
