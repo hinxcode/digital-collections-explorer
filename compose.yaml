@@ -6,6 +6,8 @@ services:
     environment:
       DCE_COLLECTION: ${COLLECTION:-demo}
       DCE_BASE_PATH: ${BASE_PATH:-}
+      DCE_MCP: ${MCP:-}
+      DCE_PUBLIC_URL: ${PUBLIC_URL:-}
     ports:
       - "${PORT:-8000}:8000"
     volumes:
