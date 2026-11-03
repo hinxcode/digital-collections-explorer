@@ -106,9 +106,13 @@ function SearchBar({
           className="search-field-button"
           onClick={() => fileInputRef.current?.click()}
           aria-label="Search with an image"
-          title="Search with an image. You can also drop or paste one here."
+          aria-describedby="search-image-tip"
         >
           <CameraIcon />
+          <span id="search-image-tip" className="search-field-tip" role="tooltip">
+            <strong>Search with an image</strong>
+            Choose a picture, or drop or paste one here, to find images that look like it.
+          </span>
         </button>
         <button
           type="submit"
