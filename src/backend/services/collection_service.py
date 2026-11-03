@@ -232,13 +232,6 @@ class CollectionService:
         described["objects"] = len(self.members)
         described["uncataloged_images"] = int((~self.cataloged_rows).sum())
         index = read_index_info(self.embeddings.embeddings_dir) or {}
-        model_name = index.get("model_name")
-        if is_grouped(index):
-            model_name = settings.model_name
-        described["index"] = {
-            "model_name": model_name,
-            "built_at": index.get("built_at"),
-        }
         described["groups"] = self.group_summary()
         described["catalog_search"] = is_grouped(index) and has_table(
             Path(self.embeddings.embeddings_dir) / METADATA_DB, "records_fts"

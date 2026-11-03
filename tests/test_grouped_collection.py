@@ -313,7 +313,6 @@ def test_collection_info_lists_each_group_with_its_size(grouped):
         {"id": "east", "label": "East Wing", "images": 3, "objects": 2},
         {"id": "west", "label": "West Wing", "images": 2, "objects": 2},
     ]
-    assert info["index"] == {"model_name": MODEL, "built_at": "2026-10-19T00:00:00Z"}
 
 
 def test_a_single_index_has_no_groups():
