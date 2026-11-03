@@ -1,7 +1,7 @@
 import React from 'react';
 import './UncatalogedToggle.css';
 
-function UncatalogedToggle({ collection, checked, onChange }) {
+function UncatalogedToggle({ collection, catalogedOnly, onChange }) {
   const count = collection?.uncataloged_images || 0;
   if (!count || count >= collection.images) {
     return null;
@@ -10,13 +10,13 @@ function UncatalogedToggle({ collection, checked, onChange }) {
   return (
     <label
       className="uncataloged-toggle"
-      title={`${count.toLocaleString()} images have no catalog record. Only a search by appearance can find them.`}
+      title={`Leave out the ${count.toLocaleString()} images that have no catalog record. Only a search by appearance can find them.`}
     >
-      <span>Images without catalog records</span>
+      <span>With catalog records only</span>
       <input
         type="checkbox"
         role="switch"
-        checked={checked}
+        checked={catalogedOnly}
         onChange={(event) => onChange(event.target.checked)}
       />
       <span className="uncataloged-toggle-track" aria-hidden="true" />

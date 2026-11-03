@@ -249,8 +249,8 @@ function App() {
                 />
                 <UncatalogedToggle
                   collection={collection}
-                  checked={includeUncataloged}
-                  onChange={handleUncatalogedChanged}
+                  catalogedOnly={!includeUncataloged}
+                  onChange={(catalogedOnly) => handleUncatalogedChanged(!catalogedOnly)}
                 />
                 {route.name === 'search' && collection?.catalog_search && (
                   <ModeToggle
