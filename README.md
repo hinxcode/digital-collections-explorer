@@ -219,14 +219,16 @@ When `record_fields` is present, an item page lists its record's fields in their
 `position` order, with repeated labels grouped together, and `/api/items/<id>` returns
 them with the record's facets under `record`.
 
-When `related_sources` is present, an item page also shows where else its record
-appears, such as the same object on Flickr Commons: the photo's thumbnail, served from
-`/images/related/<source_id>`, its title linking to it, its faves, comments and
-galleries from the `counts` JSON, its tags from `related_tags` in `position` order, and
-its rights. `/api/items/<id>` returns them under `record.related`. Name each source for
-visitors in `collection.json`, for example
-`"sources": {"flickr": {"label": "Flickr Commons", "note": "..."}}`: the section is
-headed "On Flickr Commons" and shows the note under the heading.
+When `related_sources` is present, an item page also notes where else its record
+appears, such as the same object on Flickr Commons: one line per photo, those showing
+one of the record's images first, its title linking to it, followed by its faves and
+comments from the `counts` JSON.
+`/api/items/<id>` returns them under `record.related`, together with what the page
+leaves out: the photo's thumbnail, served from `/images/related/<source_id>`, its
+galleries, its tags from `related_tags` in `position` order, and its rights. Name each
+source for visitors in `collection.json`, for example
+`"sources": {"flickr": {"label": "Flickr Commons"}}`: the lines are headed "Also on
+Flickr Commons".
 
 ## Searching by Appearance and by Catalog
 

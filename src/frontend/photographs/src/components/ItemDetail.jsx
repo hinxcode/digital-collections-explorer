@@ -307,10 +307,10 @@ function ItemDetail({ id, collection, canGoBack }) {
               {license.note ? ` — ${license.note}` : ''}
             </p>
           )}
+
+          <RelatedSources related={object?.record?.related} sources={collection?.sources} />
         </div>
       </div>
-
-      <RelatedSources related={object?.record?.related} sources={collection?.sources} />
 
       {similar.length > 0 && (
         <section>
