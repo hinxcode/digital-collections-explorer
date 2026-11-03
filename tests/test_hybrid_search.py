@@ -164,6 +164,13 @@ def test_searching_by_appearance_only_leaves_the_catalog_out(hybrid):
     assert found["search"]["weights"] == {"visual": 1.0, "keyword": 0.0}
 
 
+def test_images_without_a_record_can_be_left_out_of_appearance_matches(hybrid):
+    kept = objects(run(hybrid, "quilt", mode="visual"))
+    assert "b2" in kept
+    left_out = objects(run(hybrid, "quilt", mode="visual", cataloged_only=True))
+    assert left_out == [o for o in kept if o != "b2"]
+
+
 def test_the_group_filter_applies_to_catalog_matches(hybrid):
     found = run(hybrid, "quilt", mode="keyword", groups=["west"])
     assert found["results"] == []

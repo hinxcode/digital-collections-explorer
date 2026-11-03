@@ -7,6 +7,8 @@ const groupsParam = (groups) => (
   groups && groups.length > 0 ? `&groups=${encodeURIComponent(groups.join(','))}` : ''
 );
 
+const uncatalogedParam = (uncataloged) => (uncataloged ? '' : '&uncataloged=false');
+
 const failure = async (response) => {
   const error = new Error(`API error: ${response.status}`);
   if (VISITOR_FACING_STATUSES.includes(response.status)) {
@@ -25,12 +27,14 @@ const failure = async (response) => {
  * @param {number} page - Page number for pagination (default: 1)
  * @returns {Promise<Array>} - Array of search results
  */
-export const searchByText = async (query, limit = 50, page = 1, groups = [], { mode = 'auto', exact = false } = {}) => {
+export const searchByText = async (query, limit = 50, page = 1, groups = [], {
+  mode = 'auto', exact = false, uncataloged = true,
+} = {}) => {
   try {
     const pageParam = Math.max(1, parseInt(page) || 1);
     const modeParam = mode !== 'auto' ? `&mode=${mode}` : '';
     const spellingParam = exact ? '&correct_spelling=false' : '';
-    const response = await fetch(`${API_URL}/api/search/text?query=${encodeURIComponent(query)}&limit=${limit}&page=${pageParam}${groupsParam(groups)}${modeParam}${spellingParam}`);
+    const response = await fetch(`${API_URL}/api/search/text?query=${encodeURIComponent(query)}&limit=${limit}&page=${pageParam}${groupsParam(groups)}${uncatalogedParam(uncataloged)}${modeParam}${spellingParam}`);
     
     if (!response.ok) {
       throw await failure(response);
@@ -51,7 +55,7 @@ export const searchByText = async (query, limit = 50, page = 1, groups = [], { m
  * @param {number} page - Page number for pagination
  * @returns {Promise<Array>} - Array of search results
  */
-export const searchByImage = async (image, limit = 50, page = 1, groups = []) => {
+export const searchByImage = async (image, limit = 50, page = 1, groups = [], uncataloged = true) => {
   try {
     const formData = new FormData();
     formData.append('image', image);
@@ -59,6 +63,9 @@ export const searchByImage = async (image, limit = 50, page = 1, groups = []) =>
     formData.append('page', page);
     if (groups.length > 0) {
       formData.append('groups', groups.join(','));
+    }
+    if (!uncataloged) {
+      formData.append('uncataloged', 'false');
     }
 
     const response = await fetch(`${API_URL}/api/search/image`, {
@@ -138,8 +145,8 @@ export const getCollection = () => getJson('/api/collection');
  * @param {number} offset - Continue the same order further on, without repeats
  * @returns {Promise<{results: Array, has_more: boolean}>}
  */
-export const getSample = (limit, seed, offset = 0, groups = []) => (
-  getJson(`/api/items/sample?limit=${limit}&seed=${seed}&offset=${offset}${groupsParam(groups)}`)
+export const getSample = (limit, seed, offset = 0, groups = [], uncataloged = true) => (
+  getJson(`/api/items/sample?limit=${limit}&seed=${seed}&offset=${offset}${groupsParam(groups)}${uncatalogedParam(uncataloged)}`)
 );
 
 /**

@@ -171,6 +171,7 @@ class HybridSearch:
         mode: str = "auto",
         correct_spelling: bool = True,
         k: float = RRF_K,
+        cataloged_only: bool = False,
     ) -> Dict[str, Any]:
         """Rank objects for a query, with each channel's rank and why they matched"""
         index = self.index
@@ -182,7 +183,9 @@ class HybridSearch:
         if visual_weight > 0 and plan.text:
             embedding = encode_text(plan.text)
             scores = self.collection.embeddings.similarity_scores(embedding)
-            visual = self.collection.ranked_objects(scores, depth, groups)
+            visual = self.collection.ranked_objects(
+                scores, depth, groups, cataloged_only
+            )
 
         keyword: List[str] = []
         by_group: Dict[str, int] = {}

@@ -3,7 +3,7 @@ import { searchHref } from '../hooks/useHashRoute';
 import './SearchNotice.css';
 
 function SearchNotice({
-  search, query, groups, mode,
+  search, query, groups, mode, uncataloged = true,
 }) {
   const { correction, keyword } = search;
   if (!correction && !keyword?.empty) {
@@ -16,7 +16,7 @@ function SearchNotice({
         <p>
           Showing results for <strong>{correction.to}</strong>
           {' · '}
-          <a href={searchHref(query, 1, groups, { mode, exact: true })}>
+          <a href={searchHref(query, 1, groups, { mode, exact: true, uncataloged })}>
             Search instead for “{correction.from}”
           </a>
         </p>
