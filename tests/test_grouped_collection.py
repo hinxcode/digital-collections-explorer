@@ -219,18 +219,12 @@ def add_related_sources(root):
     (folder / "2.jpg").write_bytes(b"flickr thumbnail")
 
 
-def test_an_item_lists_the_photos_of_its_record_from_other_sources(grouped):
+def test_an_item_lists_the_photos_of_its_record_from_other_sources_same_image_first(
+    grouped,
+):
     add_related_sources(grouped.embeddings.embeddings_dir.parent)
     related = grouped.item("a1")["record"]["related"]
     assert related == [
-        {
-            "id": "flickr:1",
-            "source": "flickr",
-            "link_type": "same_record",
-            "has_thumbnail": False,
-            "counts": {},
-            "tags": [],
-        },
         {
             "id": "flickr:2",
             "source": "flickr",
@@ -242,6 +236,14 @@ def test_an_item_lists_the_photos_of_its_record_from_other_sources(grouped):
             "rights": {"name": "No known copyright restrictions", "url": COMMONS_USAGE},
             "counts": {"faves": 3, "comments": 1},
             "tags": ["quilt", "patchwork"],
+        },
+        {
+            "id": "flickr:1",
+            "source": "flickr",
+            "link_type": "same_record",
+            "has_thumbnail": False,
+            "counts": {},
+            "tags": [],
         },
     ]
     assert grouped.item("b1")["record"]["related"] == []

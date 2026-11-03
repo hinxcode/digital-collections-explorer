@@ -31,7 +31,8 @@ FACETS_QUERY = (
 RELATED_QUERY = """
     SELECT source_id, source, link_type, image_id, url, title, thumbnail, rights,
            rights_url, counts
-    FROM related_sources WHERE record_id = ? ORDER BY source, source_id
+    FROM related_sources WHERE record_id = ?
+    ORDER BY source, image_id IS NULL, source_id
 """
 TAGS_QUERY = "SELECT tag FROM related_tags WHERE source_id = ? ORDER BY position"
 THUMBNAIL_QUERY = (
