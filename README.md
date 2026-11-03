@@ -299,6 +299,36 @@ sudo deploy/bootstrap.sh configure --name my-collection --set max_upload_mb=20
 deploy/aws/configure.sh my-collection --set max_upload_mb=20
 ```
 
+## MCP Server
+
+Set `DCE_MCP=1` and the site also answers the
+[Model Context Protocol](https://modelcontextprotocol.io) at `/mcp`, so an AI assistant
+such as Claude, ChatGPT or an editor's agent can search the collection itself. The
+endpoint is stateless, needs no account and only reads. It offers five tools:
+
+| Tool | What it does |
+| --- | --- |
+| `describe_collection` | The collection's title, groups and their sizes, license, and suggested searches |
+| `search_collection` | The site's search, in Auto, Appearance or Catalog mode, for some groups, with or without images that have no record; up to 20 objects, each with why it was found |
+| `find_similar` | Objects whose images look most like one object, in some groups or in all |
+| `search_by_image` | Objects that look like a collection image, a crop of one (a face on a stamp, say), or an image the assistant sends as base64 |
+| `get_object` | One object's record, its images, the link to the institution's record, and where else it appears |
+
+Every result links to its page on the site and to its image, and says why it was found,
+how alike it is to the query, and which catalog fields matched. Searches count against the
+same limits as visitors' searches, and an image sent as base64 against the upload limit.
+The endpoint never fetches a web address it is given. Links are built from the address the assistant used;
+behind a proxy or CDN that rewrites it, set `DCE_PUBLIC_URL` to the address visitors use,
+such as `https://collection.example.org`.
+
+```bash
+DCE_MCP=1 DCE_DATA_DIR=data/collections/my-collection python -m src.backend.main
+claude mcp add --transport http my-collection http://localhost:8000/mcp
+```
+
+Assistants that call the endpoint from the cloud, such as Claude's custom connectors,
+need a public HTTPS address; on AWS, deploy with Public HTTPS.
+
 ## Deploying to a Server or to AWS
 
 ### Any Linux machine
