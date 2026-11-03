@@ -21,22 +21,7 @@ const CloseIcon = () => (
   </svg>
 );
 
-const NARROW_SCREEN = '(max-width: 600px)';
-const PLACEHOLDER = 'Describe what you are looking for, in your own words';
-const SHORT_PLACEHOLDER = 'Describe what you want to see';
-
-const usePlaceholder = () => {
-  const [isNarrow, setIsNarrow] = useState(() => window.matchMedia(NARROW_SCREEN).matches);
-
-  useEffect(() => {
-    const query = window.matchMedia(NARROW_SCREEN);
-    const onChange = (e) => setIsNarrow(e.matches);
-    query.addEventListener('change', onChange);
-    return () => query.removeEventListener('change', onChange);
-  }, []);
-
-  return isNarrow ? SHORT_PLACEHOLDER : PLACEHOLDER;
-};
+const PLACEHOLDER = 'Describe what you want to see';
 
 const imageFrom = (fileList) => (
   Array.from(fileList || []).find((file) => file.type.startsWith('image/')) || null
@@ -54,7 +39,6 @@ function SearchBar({
   const [previewUrl, setPreviewUrl] = useState(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const fileInputRef = useRef(null);
-  const placeholder = usePlaceholder();
 
   useEffect(() => {
     if (!uploadedImage) {
@@ -113,7 +97,7 @@ function SearchBar({
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           onPaste={handlePaste}
-          placeholder={placeholder}
+          placeholder={PLACEHOLDER}
           aria-label="Search the collection"
           enterKeyHint="search"
         />

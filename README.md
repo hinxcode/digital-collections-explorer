@@ -164,7 +164,9 @@ with similar images and a link back to the institution's own record.
 
 Put a `collection.json` next to the index (in the folder you pass to `--data-dir`) to
 set the title, the introduction, the suggested searches, the license and the footer
-links. `collection.example.json` shows every field. All of them are optional. The site
+links. `collection.example.json` shows every field. All of them are optional. A
+suggested search is either the query itself or `{"query": "...", "label": "..."}`,
+whose label is shown beside it, for example to say how Auto reads it. The site
 reads the file on every visit, so a change shows up without a restart. For a deployed
 site, see `--collection-file` and `describe` below.
 
