@@ -10,7 +10,7 @@ Metadata:
       - Label: {default: Your collection}
         Parameters: [CollectionName, Source, PreparedFrom, FetchVia, AnonymousS3, SourceBucket, Limit]
       - Label: {default: Machine}
-        Parameters: [InstanceType, DiskSizeGiB, AllowedCidr, PublicHttps]
+        Parameters: [InstanceType, DiskSizeGiB, AllowedCidr, PublicHttps, Domain, CertificateArn]
       - Label: {default: Spending alert}
         Parameters: [MonthlyBudgetUsd, BudgetEmail]
       - Label: {default: Advanced}
@@ -74,6 +74,20 @@ Parameters:
     Description: >-
       Open the site to everyone over HTTPS, through CloudFront. The machine then only
       accepts traffic from CloudFront and AllowedCidr is ignored.
+  Domain:
+    Type: String
+    Default: ""
+    AllowedPattern: "^$|^([a-z0-9]([a-z0-9-]*[a-z0-9])?\\.)+[a-z]{2,}$"
+    Description: >-
+      Only with PublicHttps. A domain of your own for the site, such as
+      collection.example.org. Point it at CloudFrontAddress with a CNAME record.
+  CertificateArn:
+    Type: String
+    Default: ""
+    AllowedPattern: "^$|^arn:aws:acm:us-east-1:[0-9]{12}:certificate/[0-9a-f-]+$"
+    Description: >-
+      Only with Domain. An issued AWS Certificate Manager certificate for the domain,
+      in us-east-1, where CloudFront looks for certificates.
   MonthlyBudgetUsd:
     Type: Number
     Default: 0
@@ -106,6 +120,14 @@ Rules:
         AssertDescription: Set Source, or PreparedFrom for a collection prepared elsewhere.
       - Assert: !Or [!Equals [!Ref Source, ""], !Equals [!Ref PreparedFrom, ""]]
         AssertDescription: Set Source or PreparedFrom, not both.
+  DomainThroughCloudFront:
+    Assertions:
+      - Assert: !Or [!Equals [!Ref Domain, ""], !Equals [!Ref PublicHttps, "true"]]
+        AssertDescription: A domain of your own is served through CloudFront, so it needs PublicHttps.
+      - Assert: !Or
+          - !And [!Equals [!Ref Domain, ""], !Equals [!Ref CertificateArn, ""]]
+          - !And [!Not [!Equals [!Ref Domain, ""]], !Not [!Equals [!Ref CertificateArn, ""]]]
+        AssertDescription: Set Domain and CertificateArn together.
 
 Conditions:
   HasPreparedFrom: !Not [!Equals [!Ref PreparedFrom, ""]]
@@ -114,6 +136,7 @@ Conditions:
   HasLimit: !Not [!Equals [!Ref Limit, 0]]
   HasSourceBucket: !Not [!Equals [!Ref SourceBucket, ""]]
   UsesHttps: !Equals [!Ref PublicHttps, "true"]
+  HasDomain: !Not [!Equals [!Ref Domain, ""]]
   IsUsEast1: !Equals [!Ref "AWS::Region", us-east-1]
   HasBudget: !And
     - !Not [!Equals [!Ref MonthlyBudgetUsd, 0]]
@@ -220,12 +243,23 @@ Resources:
   Distribution:
     Type: AWS::CloudFront::Distribution
     Condition: UsesHttps
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks: [W1030]
     Properties:
       DistributionConfig:
         Enabled: true
         Comment: !Sub "Digital Collections Explorer (${CollectionName})"
         HttpVersion: http2and3
         PriceClass: PriceClass_100
+        Aliases: !If [HasDomain, [!Ref Domain], !Ref "AWS::NoValue"]
+        ViewerCertificate: !If
+          - HasDomain
+          - AcmCertificateArn: !Ref CertificateArn
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - !Ref "AWS::NoValue"
         Origins:
           - Id: site
             DomainName: !Sub
@@ -294,9 +328,16 @@ Outputs:
   SiteUrl:
     Description: Opens once indexing, or the copy of a prepared collection, has finished.
     Value: !If
-      - UsesHttps
-      - !Sub "https://${Distribution.DomainName}"
-      - !Sub "http://${SiteAddress.PublicIp}"
+      - HasDomain
+      - !Sub "https://${Domain}"
+      - !If
+        - UsesHttps
+        - !Sub "https://${Distribution.DomainName}"
+        - !Sub "http://${SiteAddress.PublicIp}"
+  CloudFrontAddress:
+    Condition: UsesHttps
+    Description: The site's CloudFront address. A domain of your own points here with a CNAME record.
+    Value: !GetAtt Distribution.DomainName
   InstanceId:
     Value: !Ref Instance
   Connect:

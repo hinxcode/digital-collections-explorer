@@ -312,6 +312,13 @@ To open the site to the public, add `--https`. The site then gets an `https://` 
 deploy/aws/deploy.sh my-collection --https
 ```
 
+To serve it at a domain of your own as well, request a certificate for the domain in AWS Certificate Manager in us-east-1, where CloudFront looks for certificates, whatever region the site runs in. Add the DNS record it asks for, and once the certificate is issued, deploy with the domain and the certificate. The script then says which CNAME record to add where your domain's DNS is kept. The CloudFront address keeps working, so links already shared do not break. `--no-domain` goes back to the CloudFront address only.
+
+```bash
+aws acm request-certificate --region us-east-1 --domain-name collection.example.org --validation-method DNS
+deploy/aws/deploy.sh my-collection --https --domain collection.example.org --certificate-arn arn:aws:acm:us-east-1:...
+```
+
 To move a deployed site to a newer version without indexing again:
 
 ```bash
