@@ -8,6 +8,7 @@ import ItemDetail from './components/ItemDetail';
 import ModeToggle from './components/ModeToggle';
 import SearchNotice from './components/SearchNotice';
 import SiteFooter from './components/SiteFooter';
+import UncatalogedToggle from './components/UncatalogedToggle';
 import {
   homeHref, imageSearchHref, searchHref, useHashRoute,
 } from './hooks/useHashRoute';
@@ -35,7 +36,9 @@ function App() {
   const searchInputRef = useRef(null);
   const groupsKey = (route.groups || []).join(',');
   const selectedGroups = useMemo(() => groupsKey.split(',').filter(Boolean), [groupsKey]);
-  const wallGroups = useRef(groupsKey);
+  const includeUncataloged = route.uncataloged !== false;
+  const wallKey = `${groupsKey}|${includeUncataloged}`;
+  const wallGroups = useRef(wallKey);
   const groupLabels = useMemo(
     () => Object.fromEntries((collection?.groups || []).map((group) => [group.id, group.label])),
     [collection],
@@ -56,9 +59,9 @@ function App() {
   const extendWall = useCallback(() => {
     setWallIsLoading(true);
     setWallFailed(false);
-    getSample(WALL_SIZE, wallSeed.current, wall.length, selectedGroups)
+    getSample(WALL_SIZE, wallSeed.current, wall.length, selectedGroups, includeUncataloged)
       .then(({ results: more, has_more: hasMoreImages }) => {
-        if (wallGroups.current === groupsKey) {
+        if (wallGroups.current === wallKey) {
           setWall((shown) => [...shown, ...more]);
           setWallHasMore(hasMoreImages);
         }
@@ -68,16 +71,16 @@ function App() {
         setWallFailed(true);
       })
       .finally(() => setWallIsLoading(false));
-  }, [wall.length, groupsKey, selectedGroups]);
+  }, [wall.length, wallKey, selectedGroups, includeUncataloged]);
 
   useEffect(() => {
-    if (route.name === 'home' && wallGroups.current !== groupsKey) {
-      wallGroups.current = groupsKey;
+    if (route.name === 'home' && wallGroups.current !== wallKey) {
+      wallGroups.current = wallKey;
       setWall([]);
       setWallHasMore(false);
       setWallFailed(false);
     }
-  }, [route.name, groupsKey]);
+  }, [route.name, wallKey]);
 
   useEffect(() => {
     if (route.name === 'home' && wall.length === 0 && !wallIsLoading && !wallFailed) {
@@ -103,8 +106,15 @@ function App() {
       ? searchByText(route.query, RESULTS_PER_PAGE, route.page, selectedGroups, {
         mode: route.mode,
         exact: route.exact,
+        uncataloged: includeUncataloged,
       })
-      : searchByImage(uploadedImage, RESULTS_PER_PAGE, route.page, selectedGroups);
+      : searchByImage(
+        uploadedImage,
+        RESULTS_PER_PAGE,
+        route.page,
+        selectedGroups,
+        includeUncataloged,
+      );
 
     request
       .then(({ results: found, search }) => {
@@ -124,7 +134,10 @@ function App() {
     return () => {
       isCurrent = false;
     };
-  }, [route.name, route.query, route.page, route.mode, route.exact, uploadedImage, selectedGroups]);
+  }, [
+    route.name, route.query, route.page, route.mode, route.exact, uploadedImage, selectedGroups,
+    includeUncataloged,
+  ]);
 
   useEffect(() => {
     if (route.name === 'home') {
@@ -134,47 +147,64 @@ function App() {
 
   useEffect(() => {
     if (route.name === 'image-search' && !uploadedImage) {
-      navigate(homeHref(selectedGroups));
+      navigate(homeHref(selectedGroups, includeUncataloged));
     }
-  }, [route.name, uploadedImage, navigate, selectedGroups]);
+  }, [route.name, uploadedImage, navigate, selectedGroups, includeUncataloged]);
 
   const handleSearchByText = useCallback((query) => {
     if (query.trim()) {
-      navigate(searchHref(query.trim(), 1, selectedGroups));
+      navigate(searchHref(query.trim(), 1, selectedGroups, { uncataloged: includeUncataloged }));
     }
-  }, [navigate, selectedGroups]);
+  }, [navigate, selectedGroups, includeUncataloged]);
 
   const handleSearchByImage = useCallback((image) => {
     setUploadedImage(image);
     setSearchQuery('');
-    navigate(imageSearchHref(1, selectedGroups));
-  }, [navigate, selectedGroups]);
+    navigate(imageSearchHref(1, selectedGroups, includeUncataloged));
+  }, [navigate, selectedGroups, includeUncataloged]);
 
   const handleImageCleared = useCallback(() => {
     setUploadedImage(null);
-    navigate(homeHref(selectedGroups));
-  }, [navigate, selectedGroups]);
+    navigate(homeHref(selectedGroups, includeUncataloged));
+  }, [navigate, selectedGroups, includeUncataloged]);
 
   const handlePageChanged = useCallback((change) => {
     const page = typeof change === 'function' ? change(route.page) : change;
     navigate(route.name === 'search'
-      ? searchHref(route.query, page, selectedGroups, { mode: route.mode, exact: route.exact })
-      : imageSearchHref(page, selectedGroups));
-  }, [navigate, route.name, route.query, route.page, route.mode, route.exact, selectedGroups]);
+      ? searchHref(route.query, page, selectedGroups, {
+        mode: route.mode, exact: route.exact, uncataloged: includeUncataloged,
+      })
+      : imageSearchHref(page, selectedGroups, includeUncataloged));
+  }, [
+    navigate, route.name, route.query, route.page, route.mode, route.exact, selectedGroups,
+    includeUncataloged,
+  ]);
 
-  const handleGroupsChanged = useCallback((groups) => {
+  const handleFilterChanged = useCallback((groups, uncataloged) => {
     if (route.name === 'search') {
-      navigate(searchHref(route.query, 1, groups, { mode: route.mode, exact: route.exact }));
+      navigate(searchHref(route.query, 1, groups, {
+        mode: route.mode, exact: route.exact, uncataloged,
+      }));
     } else if (route.name === 'image-search') {
-      navigate(imageSearchHref(1, groups));
+      navigate(imageSearchHref(1, groups, uncataloged));
     } else {
-      navigate(homeHref(groups));
+      navigate(homeHref(groups, uncataloged));
     }
   }, [navigate, route.name, route.query, route.mode, route.exact]);
 
+  const handleGroupsChanged = useCallback((groups) => (
+    handleFilterChanged(groups, includeUncataloged)
+  ), [handleFilterChanged, includeUncataloged]);
+
+  const handleUncatalogedChanged = useCallback((uncataloged) => (
+    handleFilterChanged(selectedGroups, uncataloged)
+  ), [handleFilterChanged, selectedGroups]);
+
   const handleModeChanged = useCallback((mode) => {
-    navigate(searchHref(route.query, 1, selectedGroups, { mode, exact: route.exact }));
-  }, [navigate, route.query, route.exact, selectedGroups]);
+    navigate(searchHref(route.query, 1, selectedGroups, {
+      mode, exact: route.exact, uncataloged: includeUncataloged,
+    }));
+  }, [navigate, route.query, route.exact, selectedGroups, includeUncataloged]);
 
   const isSearching = route.name === 'search' || route.name === 'image-search';
   const title = collection?.title || 'Digital Collection Explorer';
@@ -217,6 +247,11 @@ function App() {
                     ? searchInfo?.keyword?.groups
                     : undefined}
                 />
+                <UncatalogedToggle
+                  collection={collection}
+                  checked={includeUncataloged}
+                  onChange={handleUncatalogedChanged}
+                />
                 {route.name === 'search' && collection?.catalog_search && (
                   <ModeToggle
                     mode={route.mode}
@@ -234,6 +269,7 @@ function App() {
             <ExampleQueries
               queries={collection?.example_queries}
               groups={selectedGroups}
+              uncataloged={includeUncataloged}
             />
             <section className="wall">
               <div className="wall-heading">
@@ -275,6 +311,7 @@ function App() {
                 query={route.query}
                 groups={selectedGroups}
                 mode={route.mode}
+                uncataloged={includeUncataloged}
               />
             ) : null}
           />

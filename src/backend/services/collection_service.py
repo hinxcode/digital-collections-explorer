@@ -42,6 +42,8 @@ class CollectionService:
         self.row_group: List[int] = []
         self.object_groups: Dict[str, Set[int]] = {}
         self.groups: List[Dict[str, Any]] = []
+        self.uncataloged_objects: Set[str] = set()
+        self.cataloged_rows: Optional[torch.Tensor] = None
 
     def _ensure_index(self) -> None:
         if not self.embeddings.is_loaded:
@@ -50,16 +52,21 @@ class CollectionService:
         if len(item_ids) == self.indexed_count:
             return
         self.position, self.object_ids, self.members = {}, [], {}
+        cataloged: List[bool] = []
         for index, item_id in enumerate(item_ids):
             metadata = (self.embeddings.metadata or {}).get(item_id, {})
-            object_id = (
-                metadata.get("object_id")
-                or object_id_from(metadata.get("catalog"))
-                or item_id
+            record = metadata.get("object_id") or object_id_from(
+                metadata.get("catalog")
             )
+            object_id = record or item_id
             self.position[item_id] = index
             self.object_ids.append(object_id)
             self.members.setdefault(object_id, []).append(index)
+            cataloged.append(bool(record))
+        self.cataloged_rows = torch.tensor(cataloged, dtype=torch.bool)
+        self.uncataloged_objects = {
+            self.object_ids[i] for i, known in enumerate(cataloged) if not known
+        }
         self._index_groups()
         self.indexed_count = len(item_ids)
 
@@ -103,18 +110,33 @@ class CollectionService:
         self._ensure_index()
         return {self.group_index[g] for g in groups}
 
-    def group_mask(self, groups: Optional[List[str]]) -> Optional[torch.Tensor]:
+    def group_mask(
+        self, groups: Optional[List[str]], cataloged_only: bool = False
+    ) -> Optional[torch.Tensor]:
         """Which rows belong to the given groups, or None when every row counts"""
         numbers = self._numbers(groups)
-        if numbers is None:
-            return None
-        wanted = torch.tensor(sorted(numbers), dtype=torch.long)
-        return torch.isin(self.embeddings.group_of_row, wanted)
+        mask = None
+        if numbers is not None:
+            wanted = torch.tensor(sorted(numbers), dtype=torch.long)
+            mask = torch.isin(self.embeddings.group_of_row, wanted)
+        if cataloged_only:
+            self._ensure_index()
+            if self.uncataloged_objects:
+                known = self.cataloged_rows
+                mask = known if mask is None else mask & known
+        return mask
 
-    def _objects_in(self, numbers: Optional[Set[int]]) -> List[str]:
-        if numbers is None:
-            return list(self.members)
-        return [o for o in self.members if self.object_groups[o] & numbers]
+    def _objects_in(
+        self, numbers: Optional[Set[int]], cataloged_only: bool = False
+    ) -> List[str]:
+        objects = (
+            list(self.members)
+            if numbers is None
+            else [o for o in self.members if self.object_groups[o] & numbers]
+        )
+        if cataloged_only:
+            objects = [o for o in objects if o not in self.uncataloged_objects]
+        return objects
 
     def objects_among(
         self, object_ids: List[str], groups: Optional[List[str]] = None
@@ -149,12 +171,16 @@ class CollectionService:
         return members[0]
 
     def ranked_objects(
-        self, scores: torch.Tensor, limit: int, groups: Optional[List[str]] = None
+        self,
+        scores: torch.Tensor,
+        limit: int,
+        groups: Optional[List[str]] = None,
+        cataloged_only: bool = False,
     ) -> List[Tuple[str, int, float]]:
         """Objects by their best image's raw similarity, with that image and score"""
         self._ensure_index()
         flat = scores.flatten()
-        mask = self.group_mask(groups)
+        mask = self.group_mask(groups, cataloged_only)
         if mask is not None:
             flat = flat.masked_fill(~mask, float("-inf"))
         found: List[Tuple[str, int, float]] = []
@@ -204,6 +230,7 @@ class CollectionService:
                 logger.warning(f"Ignoring unreadable {path}: {e}")
         described["images"] = self.indexed_count
         described["objects"] = len(self.members)
+        described["uncataloged_images"] = int((~self.cataloged_rows).sum())
         index = read_index_info(self.embeddings.embeddings_dir) or {}
         model_name = index.get("model_name")
         if is_grouped(index):
@@ -224,11 +251,12 @@ class CollectionService:
         seed: Optional[int] = None,
         offset: int = 0,
         groups: Optional[List[str]] = None,
+        cataloged_only: bool = False,
     ) -> List[Dict[str, Any]]:
         """Return a varied handful of images, at most one per object, without repeats"""
         self._ensure_index()
         numbers = self._numbers(groups)
-        objects = self._objects_in(numbers)
+        objects = self._objects_in(numbers, cataloged_only)
         random.Random(seed).shuffle(objects)
         chosen = objects[offset : offset + limit]
         return [
@@ -244,10 +272,12 @@ class CollectionService:
             for o in chosen
         ]
 
-    def object_count(self, groups: Optional[List[str]] = None) -> int:
+    def object_count(
+        self, groups: Optional[List[str]] = None, cataloged_only: bool = False
+    ) -> int:
         """How many distinct objects the collection, or the given groups, hold"""
         self._ensure_index()
-        return len(self._objects_in(self._numbers(groups)))
+        return len(self._objects_in(self._numbers(groups), cataloged_only))
 
     def item(self, item_id: str) -> Optional[Dict[str, Any]]:
         """Return one image with every photo of its object and, if kept, its record"""
@@ -289,6 +319,7 @@ class CollectionService:
         exclude_object: Optional[str] = None,
         score_transform: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
         groups: Optional[List[str]] = None,
+        cataloged_only: bool = False,
     ) -> List[Dict[str, Any]]:
         """Rank by raw similarity, showing each object once; transform only reported scores"""
         self._ensure_index()
@@ -296,7 +327,7 @@ class CollectionService:
         seen = {exclude_object} if exclude_object else set()
         skipped = 0
         flat = scores.flatten()
-        mask = self.group_mask(groups)
+        mask = self.group_mask(groups, cataloged_only)
         if mask is not None:
             flat = flat.masked_fill(~mask, float("-inf"))
         order = torch.argsort(flat, descending=True).tolist()

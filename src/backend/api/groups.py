@@ -7,6 +7,9 @@ from fastapi import HTTPException
 from ..services.collection_service import collection_service
 
 GROUPS_DESCRIPTION = "Comma-separated groups, such as nmah,saam; every group if omitted"
+UNCATALOGED_DESCRIPTION = (
+    "Include images that have no catalog record; false leaves them out"
+)
 
 
 def checked_groups(groups: Optional[str]) -> Optional[List[str]]:

@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 
 from ...services.collection_service import collection_service
-from ..groups import GROUPS_DESCRIPTION, checked_groups
+from ..groups import GROUPS_DESCRIPTION, UNCATALOGED_DESCRIPTION, checked_groups
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["browse"])
@@ -25,12 +25,14 @@ async def sample_items(
     seed: Optional[int] = Query(None, description="Repeat a previous sample"),
     offset: int = Query(0, ge=0, description="Continue the same sample further on"),
     groups: Optional[str] = Query(None, description=GROUPS_DESCRIPTION),
+    uncataloged: bool = Query(True, description=UNCATALOGED_DESCRIPTION),
 ):
     """A varied handful of images to start wandering from, one per object."""
     wanted = checked_groups(groups)
+    known = not uncataloged
     return {
-        "results": collection_service.sample(limit, seed, offset, wanted),
-        "has_more": offset + limit < collection_service.object_count(wanted),
+        "results": collection_service.sample(limit, seed, offset, wanted, known),
+        "has_more": offset + limit < collection_service.object_count(wanted, known),
     }
 
 

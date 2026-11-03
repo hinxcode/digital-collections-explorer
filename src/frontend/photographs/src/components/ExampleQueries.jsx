@@ -5,7 +5,7 @@ import './ExampleQueries.css';
 // As many suggestions as fit on one line under the search bar.
 const SHOWN_QUERIES = 5;
 
-function ExampleQueries({ queries, groups = [] }) {
+function ExampleQueries({ queries, groups = [], uncataloged = true }) {
   if (!queries || queries.length === 0) {
     return null;
   }
@@ -14,7 +14,7 @@ function ExampleQueries({ queries, groups = [] }) {
     <div className="example-queries">
       <span className="example-queries-label">Try</span>
       {queries.slice(0, SHOWN_QUERIES).map((query) => (
-        <a key={query} className="example-query" href={searchHref(query, 1, groups)}>
+        <a key={query} className="example-query" href={searchHref(query, 1, groups, { uncataloged })}>
           {query}
         </a>
       ))}

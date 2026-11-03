@@ -13,6 +13,7 @@ const parse = (hash) => {
     return { name: 'item', id: decodeURIComponent(segments[1]) };
   }
   const groups = groupsFrom(params);
+  const uncataloged = params.get('uncataloged') !== '0';
   if (segments[0] === 'search' && params.get('q')) {
     return {
       name: 'search',
@@ -21,17 +22,23 @@ const parse = (hash) => {
       groups,
       mode: SEARCH_MODES.includes(params.get('mode')) ? params.get('mode') : 'auto',
       exact: params.get('exact') === '1',
+      uncataloged,
     };
   }
   if (segments[0] === 'image-search') {
-    return { name: 'image-search', page: Number(params.get('page')) || 1, groups };
+    return {
+      name: 'image-search', page: Number(params.get('page')) || 1, groups, uncataloged,
+    };
   }
-  return { name: 'home', groups };
+  return { name: 'home', groups, uncataloged };
 };
 
-const hashFor = (path, params, groups) => {
+const hashFor = (path, params, groups, uncataloged = true) => {
   if (groups.length > 0) {
     params.set('groups', groups.join(','));
+  }
+  if (!uncataloged) {
+    params.set('uncataloged', '0');
   }
   const query = params.toString().replace(/%2C/gi, ',');
   return query ? `#/${path}?${query}` : `#/${path}`;
@@ -39,9 +46,13 @@ const hashFor = (path, params, groups) => {
 
 export const itemHref = (id) => `#/item/${encodeURIComponent(id)}`;
 
-export const homeHref = (groups = []) => hashFor('', new URLSearchParams(), groups);
+export const homeHref = (groups = [], uncataloged = true) => (
+  hashFor('', new URLSearchParams(), groups, uncataloged)
+);
 
-export const searchHref = (query, page = 1, groups = [], { mode = 'auto', exact = false } = {}) => {
+export const searchHref = (query, page = 1, groups = [], {
+  mode = 'auto', exact = false, uncataloged = true,
+} = {}) => {
   const params = new URLSearchParams({ q: query });
   if (page > 1) {
     params.set('page', page);
@@ -52,15 +63,15 @@ export const searchHref = (query, page = 1, groups = [], { mode = 'auto', exact 
   if (exact) {
     params.set('exact', '1');
   }
-  return hashFor('search', params, groups);
+  return hashFor('search', params, groups, uncataloged);
 };
 
-export const imageSearchHref = (page = 1, groups = []) => {
+export const imageSearchHref = (page = 1, groups = [], uncataloged = true) => {
   const params = new URLSearchParams();
   if (page > 1) {
     params.set('page', page);
   }
-  return hashFor('image-search', params, groups);
+  return hashFor('image-search', params, groups, uncataloged);
 };
 
 const HOME = '#/';
