@@ -70,6 +70,19 @@ def test_a_search_names_each_object_and_links_to_its_page():
     assert results[0]["thumbnail"] == "/images/b1?size=thumbnail"
 
 
+def test_results_name_their_object_and_later_pages_can_be_reached():
+    first = call(
+        "search_collection", {"query": "quilt", "groups": ["west"], "limit": 1}
+    )
+    second = call(
+        "search_collection",
+        {"query": "quilt", "groups": ["west"], "limit": 1, "page": 2},
+    )
+    assert [r["id"] for r in first.structured_content["results"]] == ["b1"]
+    assert [r["id"] for r in second.structured_content["results"]] == ["b2"]
+    assert first.structured_content["results"][0]["object_id"] == "rec-b"
+
+
 def test_a_search_can_leave_out_images_without_a_record():
     answer = call(
         "search_collection",

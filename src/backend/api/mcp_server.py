@@ -33,6 +33,9 @@ CatalogedOnly = Annotated[
     bool, Field(description="Leave out images that have no catalog record")
 ]
 Limit = Annotated[int, Field(ge=1, le=MAX_RESULTS)]
+Page = Annotated[
+    int, Field(ge=1, le=search.MAX_PAGE, description="Later pages of the results")
+]
 INSTRUCTIONS = (
     "Search a collection of images by what they show and, where the collection keeps "
     "catalog records, by the records' text. Write a query as a short description of what "
@@ -53,6 +56,9 @@ server = MCPServer(
 class Found(BaseModel):
     id: str = Field(
         description="This image; pass it to get_object, find_similar or search_by_image"
+    )
+    object_id: Optional[str] = Field(
+        None, description="The same for every image of one object"
     )
     title: Optional[str] = Field(
         description="The catalog title; empty when the image has no catalog record"
@@ -91,6 +97,11 @@ class SearchAnswer(BaseModel):
     note: Optional[str] = Field(
         None,
         description="A spelling correction, or why the catalog found nothing",
+    )
+    catalog_matches: Optional[int] = Field(
+        None,
+        description="How many records the catalog matched in all; in catalog mode "
+        "these are all the results there are",
     )
     results: List[Found]
 
@@ -180,6 +191,7 @@ def found(
     similarity = result.get("score") if by_image else provenance.get("similarity")
     return Found(
         id=image_id,
+        object_id=result.get("object_id") or metadata.get("object_id"),
         title=metadata.get("title"),
         group=labels.get(metadata.get("group"), metadata.get("group")),
         images=result.get("image_count") or 1,
@@ -293,6 +305,7 @@ async def search_collection(
     groups: Groups = None,
     cataloged_only: CatalogedOnly = False,
     limit: Limit = 10,
+    page: Page = 1,
 ) -> SearchAnswer:
     """Find objects by what their images show and by their catalog records"""
     await allow(ctx)
@@ -300,7 +313,7 @@ async def search_collection(
         answer = await search.search_by_text(
             query=query,
             limit=limit,
-            page=1,
+            page=page,
             group_by_object=True,
             groups=",".join(groups) if groups else None,
             mode=MODES[mode],
@@ -322,6 +335,7 @@ async def search_collection(
     return SearchAnswer(
         reading=how.get("message"),
         note="; ".join(n for n in notes if n) or None,
+        catalog_matches=(how.get("keyword") or {}).get("records"),
         results=[found(r.model_dump(), labels, site) for r in answer.results],
     )
 
@@ -369,6 +383,7 @@ async def search_by_image(
     groups: Groups = None,
     cataloged_only: CatalogedOnly = False,
     limit: Limit = 10,
+    page: Page = 1,
 ) -> LookAlikes:
     """Objects whose images look like a collection image, part of one, or your own"""
     if (id is None) == (image_data is None):
@@ -380,7 +395,7 @@ async def search_by_image(
     def ranked():
         embedding = search.model_service.encode_image(image)
         return search.ranked_results(
-            embedding, limit, 1, True, wanted, cataloged_only=cataloged_only
+            embedding, limit, page, True, wanted, cataloged_only=cataloged_only
         )
 
     async with search.search_queue.turn():
