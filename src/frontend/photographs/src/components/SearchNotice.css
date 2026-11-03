@@ -25,6 +25,10 @@
   font-weight: 600;
 }
 
-.search-notice-empty {
+.search-notice-note {
   color: #e2c39b;
+}
+
+.search-notice-note[title] {
+  cursor: help;
 }

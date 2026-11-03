@@ -256,7 +256,6 @@ function App() {
                   <ModeToggle
                     mode={route.mode}
                     onChange={handleModeChanged}
-                    reading={isLoading ? null : searchInfo}
                   />
                 )}
               </div>
