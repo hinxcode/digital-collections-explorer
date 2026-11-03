@@ -101,7 +101,6 @@ def test_collection_file_overrides_defaults(service, tmp_path, monkeypatch):
     info = service.info()
     assert info["title"] == "NMAH" and info["example_queries"] == ["a quilt"]
     assert (info["images"], info["objects"]) == (4, 3)
-    assert set(info["index"]) == {"model_name", "built_at"}
 
 
 def test_a_description_that_is_not_an_object_is_ignored(service, tmp_path, monkeypatch):

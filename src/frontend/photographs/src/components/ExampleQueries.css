@@ -30,3 +30,14 @@
   background-color: #8b5a2b;
   border-color: #8b5a2b;
 }
+
+.example-query-label {
+  margin-left: 0.45rem;
+  font-size: 0.8rem;
+  color: #9a9a9a;
+}
+
+.example-query:hover .example-query-label,
+.example-query:focus-visible .example-query-label {
+  color: #e6d5c3;
+}
