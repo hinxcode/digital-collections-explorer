@@ -2,7 +2,7 @@
 
 import math
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 import torch
 
@@ -172,6 +172,7 @@ class HybridSearch:
         correct_spelling: bool = True,
         k: float = RRF_K,
         cataloged_only: bool = False,
+        records: Optional[Set[str]] = None,
     ) -> Dict[str, Any]:
         """Rank objects for a query, with each channel's rank and why they matched"""
         index = self.index
@@ -184,7 +185,7 @@ class HybridSearch:
             embedding = encode_text(plan.text)
             scores = self.collection.embeddings.similarity_scores(embedding)
             visual = self.collection.ranked_objects(
-                scores, depth, groups, cataloged_only
+                scores, depth, groups, cataloged_only, records
             )
 
         keyword: List[str] = []
@@ -192,10 +193,19 @@ class HybridSearch:
         empty = None
         if keyword_weight > 0 and index is not None and plan.expression:
             hits = index.search(plan.expression, -1)
-            everywhere = self.collection.objects_among([r for r, _ in hits])
+            matching = self.collection.objects_among([r for r, _ in hits])
+            everywhere = (
+                matching if records is None else [o for o in matching if o in records]
+            )
             by_group = self.collection.group_counts(everywhere)
             keyword = self.collection.objects_among(everywhere, groups)
-            if not keyword:
+            if not keyword and matching and not everywhere:
+                empty = {
+                    "kind": "filtered_out",
+                    "message": "No matching records have the chosen dates or "
+                    "catalog values",
+                }
+            elif not keyword:
                 empty = empty_reason(plan, index)
 
         fused = fuse(
