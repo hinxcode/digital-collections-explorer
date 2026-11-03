@@ -14,7 +14,7 @@ Metadata:
       - Label: {default: Spending alert}
         Parameters: [MonthlyBudgetUsd, BudgetEmail]
       - Label: {default: Advanced}
-        Parameters: [Image, BootstrapUrl, MachineImageId, CloudFrontPrefixList]
+        Parameters: [BasePath, Image, BootstrapUrl, MachineImageId, CloudFrontPrefixList]
 
 Parameters:
   CollectionName:
@@ -97,6 +97,13 @@ Parameters:
     Type: String
     Default: ""
     Description: Where to send the alert.
+  BasePath:
+    Type: String
+    Default: ""
+    AllowedPattern: "^$|^(/[A-Za-z0-9._~-]+)+$"
+    Description: >-
+      Serve the site under this path, such as /explorer, for a website of your own
+      whose proxy forwards that path here. Set only when the machine is created.
   Image:
     Type: String
     Default: ghcr.io/hinxcode/digital-collections-explorer:latest
@@ -137,6 +144,7 @@ Conditions:
   HasSourceBucket: !Not [!Equals [!Ref SourceBucket, ""]]
   UsesHttps: !Equals [!Ref PublicHttps, "true"]
   HasDomain: !Not [!Equals [!Ref Domain, ""]]
+  HasBasePath: !Not [!Equals [!Ref BasePath, ""]]
   IsUsEast1: !Equals [!Ref "AWS::Region", us-east-1]
   HasBudget: !And
     - !Not [!Equals [!Ref MonthlyBudgetUsd, 0]]
@@ -220,13 +228,17 @@ Resources:
             - "chmod +x /usr/local/bin/dce-bootstrap\n"
             - !If
               - HasPreparedFrom
-              - !Sub "/usr/local/bin/dce-bootstrap install --name '${CollectionName}' --from '${PreparedFrom}' --port 80 --image '${Image}'"
+              - !Join
+                - ""
+                - - !Sub "/usr/local/bin/dce-bootstrap install --name '${CollectionName}' --from '${PreparedFrom}' --port 80 --image '${Image}'"
+                  - !If [HasBasePath, !Sub " --base-path '${BasePath}'", ""]
               - !Join
                 - ""
                 - - !Sub "/usr/local/bin/dce-bootstrap install --name '${CollectionName}' --source '${Source}' --port 80 --image '${Image}'"
                   - !If [HasFetchVia, !Sub " --fetch-via '${FetchVia}'", ""]
                   - !If [IsAnonymous, " --anonymous", ""]
                   - !If [HasLimit, !Sub " --limit ${Limit}", ""]
+                  - !If [HasBasePath, !Sub " --base-path '${BasePath}'", ""]
             - "\n"
       Tags:
         - {Key: Name, Value: !Sub "dce-${CollectionName}"}
@@ -329,11 +341,11 @@ Outputs:
     Description: Opens once indexing, or the copy of a prepared collection, has finished.
     Value: !If
       - HasDomain
-      - !Sub "https://${Domain}"
+      - !Sub "https://${Domain}${BasePath}"
       - !If
         - UsesHttps
-        - !Sub "https://${Distribution.DomainName}"
-        - !Sub "http://${SiteAddress.PublicIp}"
+        - !Sub "https://${Distribution.DomainName}${BasePath}"
+        - !Sub "http://${SiteAddress.PublicIp}${BasePath}"
   CloudFrontAddress:
     Condition: UsesHttps
     Description: The site's CloudFront address. A domain of your own points here with a CNAME record.

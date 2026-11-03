@@ -96,7 +96,8 @@ case "$*" in
     printf 'BootstrapUrl\thttps://example.org/bootstrap.sh\n'
     printf 'PublicHttps\t%s\n' "${FAKE_HTTPS:-false}"
     printf 'Domain\t%s\n' "$FAKE_DOMAIN"
-    printf 'CertificateArn\t%s\n' "$FAKE_CERTIFICATE" ;;
+    printf 'CertificateArn\t%s\n' "$FAKE_CERTIFICATE"
+    printf 'BasePath\t%s\n' "$FAKE_BASE_PATH" ;;
 *"acm describe-certificate"*)
     printf '%s\t%s\n' "$FAKE_CERTIFICATE_STATUS" "$FAKE_CERTIFICATE_NAMES" ;;
 *"describe-managed-prefix-lists"*) echo "pl-0cloudfront" ;;
@@ -163,6 +164,7 @@ def fake_deploy(tmp_path):
         certificate="",
         certificate_status="ISSUED",
         certificate_names="collection.example.org",
+        base_path="",
     ):
         import os
 
@@ -183,6 +185,7 @@ def fake_deploy(tmp_path):
             "FAKE_CERTIFICATE": certificate,
             "FAKE_CERTIFICATE_STATUS": certificate_status,
             "FAKE_CERTIFICATE_NAMES": certificate_names,
+            "FAKE_BASE_PATH": base_path,
         }
         if script != "deploy.sh":
             command = ["bash", str(scripts / script), "demo", *extra]
@@ -301,6 +304,28 @@ def test_an_update_keeps_the_domain_until_told_to_drop_it(fake_deploy):
     result, deploys = fake_deploy(True, "--no-https", **current)
     assert result.returncode != 0
     assert "--no-domain" in result.stderr
+
+
+def test_a_site_can_answer_under_a_path_for_a_website_of_your_own(fake_deploy):
+    result, deploys = fake_deploy(False, "--base-path", "explorer/")
+    assert result.returncode == 0, result.stderr
+    assert "BasePath=/explorer" in deploys[0]
+    assert "answers under /explorer" in result.stdout
+    result, deploys = fake_deploy(False, "--base-path", "/an explorer")
+    assert result.returncode != 0
+    assert deploys == []
+
+
+def test_the_path_is_kept_and_cannot_change_once_the_machine_exists(fake_deploy):
+    result, deploys = fake_deploy(
+        True, "--instance-type", "t3.large", base_path="/explorer"
+    )
+    assert result.returncode == 0, result.stderr
+    assert "BasePath=/explorer" in deploys[0]
+    result, deploys = fake_deploy(True, "--base-path", "/other", base_path="/explorer")
+    assert result.returncode != 0
+    assert deploys == []
+    assert "only applies when a machine is first created" in result.stderr
 
 
 def test_script_survives_being_saved_while_it_waits_for_aws(fake_deploy):

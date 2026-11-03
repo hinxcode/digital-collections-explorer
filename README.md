@@ -243,7 +243,7 @@ Set `DCE_MCP=1` and the site also answers the [Model Context Protocol](https://m
 | `search_by_image` | Objects that look like a collection image, a crop of one (a face on a stamp, say), or an image the assistant sends as base64 |
 | `get_object` | One object's record, its images, the link to the institution's record, and where else it appears |
 
-Every result links to its page on the site and to its image, and says why it was found, how alike it is to the query, and which catalog fields matched. Searches count against the same limits as visitors' searches, and an image sent as base64 against the upload limit. The endpoint never fetches a web address it is given. Links are built from the address the assistant used; behind a proxy or CDN that rewrites it, set `DCE_PUBLIC_URL` to the address visitors use, such as `https://collection.example.org`.
+Every result links to its page on the site and to its image, and says why it was found, how alike it is to the query, and which catalog fields matched. Searches count against the same limits as visitors' searches, and an image sent as base64 against the upload limit. The endpoint never fetches a web address it is given. Links are built from the address the assistant used; behind a proxy or CDN that rewrites it, set `DCE_PUBLIC_URL` to the address visitors use, such as `https://collection.example.org`, with the path if the site lives under one.
 
 ```bash
 DCE_MCP=1 DCE_DATA_DIR=data/collections/my-collection python -m src.backend.main
@@ -274,7 +274,9 @@ sudo deploy/bootstrap.sh describe --name my-collection --collection-file collect
 
 ### Under a path on an existing website
 
-A site can also live at a path such as `https://library.example.org/maps/`. Set `DCE_BASE_PATH`, or `--base-path` with the bootstrap script, or `BASE_PATH` with Docker Compose. The proxy configuration and the `robots.txt` to add at the root of the domain are covered in the [documentation](https://digital-collections-explorer.com/docs/deploy/under-a-path/).
+A site can also live at a path such as `https://library.example.org/maps/`. Set `DCE_BASE_PATH`, or `--base-path` with the bootstrap script or `deploy/aws/deploy.sh`, or `BASE_PATH` with Docker Compose. The proxy configuration and the `robots.txt` to add at the root of the domain are covered in the [documentation](https://digital-collections-explorer.com/docs/deploy/under-a-path/).
+
+Two settings in the proxy matter. Keep the visitor's host name (`proxy_set_header Host $host` in nginx), or set `DCE_PUBLIC_URL` to the full address including the path, such as `https://library.example.org/maps`, so links the site hands out, for instance to AI assistants, lead back through the proxy. And set `proxy_hops` to the number of proxies in front of the site (see Limits That Protect a Public Site), so that each visitor is limited separately.
 
 ### AWS
 

@@ -27,6 +27,7 @@ HTTPS=""
 DOMAIN=""
 CERTIFICATE_ARN=""
 NO_DOMAIN="false"
+BASE_PATH=""
 ASSUME_YES="false"
 
 usage() {
@@ -57,6 +58,9 @@ Everything you leave out keeps the value the deployment already has.
   --certificate-arn ARN an issued AWS Certificate Manager certificate for that domain, in
                         us-east-1, where CloudFront looks for certificates
   --no-domain           serve the site at its CloudFront address only
+  --base-path PATH      serve the site under PATH, such as /explorer, for a website of
+                        your own whose proxy forwards that path here. Only when the
+                        machine is first created
   --budget USD          email an alert when the monthly bill passes this amount
   --email ADDRESS       where to send that alert
   --image IMAGE         container image to install. Later, switch versions with update.sh
@@ -89,6 +93,7 @@ while [ $# -gt 0 ]; do
     --domain) DOMAIN="$2"; shift 2 ;;
     --certificate-arn) CERTIFICATE_ARN="$2"; shift 2 ;;
     --no-domain) NO_DOMAIN="true"; shift ;;
+    --base-path) BASE_PATH="$2"; shift 2 ;;
     --budget) BUDGET="$2"; shift 2 ;;
     --email) EMAIL="$2"; shift 2 ;;
     --image) IMAGE="$2"; shift 2 ;;
@@ -100,6 +105,12 @@ while [ $# -gt 0 ]; do
 done
 
 [[ "$NAME" =~ ^[a-z0-9][a-z0-9-]*$ ]] || fail "NAME may only contain lowercase letters, digits and hyphens"
+if [ -n "$BASE_PATH" ]; then
+    BASE_PATH="/${BASE_PATH#/}"
+    BASE_PATH="${BASE_PATH%/}"
+    [[ "$BASE_PATH" =~ ^(/[A-Za-z0-9._~-]+)+$ ]] ||
+        fail "--base-path must look like /explorer: letters, digits, '.', '_', '~' and '-' between slashes"
+fi
 [ -z "$COLLECTION_FILE" ] || [ -f "$COLLECTION_FILE" ] || fail "file not found: $COLLECTION_FILE"
 command -v aws >/dev/null 2>&1 || fail "the AWS CLI is not installed"
 
@@ -158,12 +169,14 @@ if [ -n "$EXISTING_INSTANCE" ] && [ "$EXISTING_INSTANCE" != "None" ]; then
     set_at_first_boot --anonymous "$ANONYMOUS" AnonymousS3
     set_at_first_boot --limit "$LIMIT" Limit
     set_at_first_boot --bootstrap-url "$BOOTSTRAP_URL" BootstrapUrl
+    set_at_first_boot --base-path "$BASE_PATH" BasePath
     SOURCE="$(current_parameter Source)"
     FROM="$(current_parameter PreparedFrom)"
     FETCH_VIA="$(current_parameter FetchVia)"
     ANONYMOUS="$(current_parameter AnonymousS3)"
     LIMIT="$(current_parameter Limit)"
     MACHINE_BOOTSTRAP_URL="$(current_parameter BootstrapUrl)"
+    BASE_PATH="$(current_parameter BasePath)"
     BOOTSTRAP_URL=""
 
     CURRENT_HTTPS="$(current_parameter PublicHttps)"
@@ -313,6 +326,7 @@ else
 fi
 [ "$BUDGET" != "0" ] && echo "  1 spending alert at \$$BUDGET per month, sent to $EMAIL"
 [ -n "$COLLECTION_FILE" ] && echo "  The site will describe itself with $COLLECTION_FILE"
+[ -n "$BASE_PATH" ] && echo "  The site answers under $BASE_PATH, for a proxy of your own to forward there"
 echo
 echo "Estimated cost while it is running:"
 "$PYTHON" "$HERE/estimate_cost.py" --region "$REGION" \
@@ -339,7 +353,7 @@ overrides=(
     "InstanceType=$INSTANCE_TYPE" "DiskSizeGiB=$DISK_GIB" "AllowedCidr=$ALLOWED_CIDR"
     "MonthlyBudgetUsd=$BUDGET" "BudgetEmail=$EMAIL" "MachineImageId=$MACHINE_IMAGE"
     "PublicHttps=$HTTPS" "CloudFrontPrefixList=$CLOUDFRONT_PREFIX_LIST"
-    "Domain=$DOMAIN" "CertificateArn=$CERTIFICATE_ARN"
+    "Domain=$DOMAIN" "CertificateArn=$CERTIFICATE_ARN" "BasePath=$BASE_PATH"
 )
 [ -n "$IMAGE" ] && overrides+=("Image=$IMAGE")
 [ -n "$BOOTSTRAP_URL" ] && overrides+=("BootstrapUrl=$BOOTSTRAP_URL")
