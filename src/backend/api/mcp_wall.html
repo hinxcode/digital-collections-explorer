@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Image wall</title>
+<style>
+  :root {
+    --bg: var(--color-background-primary, #ffffff);
+    --card: var(--color-background-secondary, #f4f2ef);
+    --text: var(--color-text-primary, #1d1b19);
+    --muted: var(--color-text-secondary, #6b645d);
+    --line: var(--color-border-primary, #ddd7cf);
+    --accent: var(--color-text-info, #8b5a2b);
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    --bg: var(--color-background-primary, #171615);
+    --card: var(--color-background-secondary, #23211f);
+    --text: var(--color-text-primary, #f3efe9);
+    --muted: var(--color-text-secondary, #a59d94);
+    --line: var(--color-border-primary, #3a3631);
+    --accent: var(--color-text-info, #d0b49f);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 12px;
+    font: 14px/1.4 var(--font-sans, system-ui, -apple-system, "Segoe UI", sans-serif);
+    color: var(--text);
+    background: var(--bg);
+  }
+  header { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; margin: 0 0 10px; }
+  header h1 { margin: 0; font-size: 15px; font-weight: 600; }
+  header p { margin: 0; color: var(--muted); font-size: 13px; }
+  button {
+    font: inherit;
+    font-size: 12px;
+    color: var(--accent);
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 2px 10px;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+  li { display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  li a { display: block; color: inherit; text-decoration: none; cursor: pointer; }
+  li img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; background: var(--line); }
+  li a:hover img, li a:focus-visible img { opacity: 0.85; }
+  .facts { display: flex; flex-direction: column; gap: 2px; padding: 7px 9px 9px; flex: 1; }
+  .title { font-weight: 600; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .title.none { font-weight: 400; font-style: italic; color: var(--muted); }
+  .small { font-size: 12px; color: var(--muted); }
+  .facts button { align-self: flex-start; margin-top: 6px; }
+  .empty { color: var(--muted); padding: 24px 0; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="heading">Waiting for results…</h1>
+  <p id="reading"></p>
+  <button id="back" type="button" hidden>Back</button>
+</header>
+<ul id="wall"></ul>
+<p id="empty" class="empty" hidden>Nothing to show.</p>
+<script>
+  const wall = document.getElementById("wall");
+  const heading = document.getElementById("heading");
+  const reading = document.getElementById("reading");
+  const back = document.getElementById("back");
+  const empty = document.getElementById("empty");
+  const pending = new Map();
+  const earlier = [];
+  let nextId = 1;
+  let canCallTools = false;
+  let question = null;
+  let shown = null;
+
+  function post(message) {
+    window.parent.postMessage({ jsonrpc: "2.0", ...message }, "*");
+  }
+
+  function request(method, params) {
+    const id = nextId++;
+    post({ id, method, params });
+    return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
+  }
+
+  function notify(method, params) {
+    post({ method, params });
+  }
+
+  function applyContext(context) {
+    if (!context) return;
+    if (context.theme) document.documentElement.dataset.theme = context.theme;
+    const variables = context.styles && context.styles.variables;
+    if (variables) {
+      for (const [name, value] of Object.entries(variables)) {
+        if (value) document.documentElement.style.setProperty(name, value);
+      }
+    }
+  }
+
+  function open(url) {
+    request("ui/open-link", { url }).catch(() => window.open(url, "_blank", "noopener"));
+  }
+
+  function headingFor(view) {
+    if (view.similarTo) return `Looks like ${view.similarTo}`;
+    if (question && question.query) return `Results for “${question.query}”`;
+    if (question && question.id) return "Looks like the image searched with";
+    return "Results";
+  }
+
+  function card(item) {
+    const li = document.createElement("li");
+    const link = document.createElement("a");
+    link.href = item.page;
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+      open(item.page);
+    });
+    const image = document.createElement("img");
+    image.src = item.thumbnail;
+    image.alt = item.title || "An image without a catalog record";
+    image.loading = "lazy";
+    link.append(image);
+    const facts = document.createElement("div");
+    facts.className = "facts";
+    const title = document.createElement("a");
+    title.className = item.title ? "title" : "title none";
+    title.textContent = item.title || "No catalog record";
+    title.href = item.page;
+    title.addEventListener("click", (event) => {
+      event.preventDefault();
+      open(item.page);
+    });
+    facts.append(title);
+    const details = [item.group, item.why].filter(Boolean).join(" · ");
+    if (details) {
+      const line = document.createElement("span");
+      line.className = "small";
+      line.textContent = details;
+      facts.append(line);
+    }
+    if (canCallTools) {
+      const more = document.createElement("button");
+      more.type = "button";
+      more.textContent = "More like this";
+      more.addEventListener("click", () => moreLike(item));
+      facts.append(more);
+    }
+    li.append(link, facts);
+    return li;
+  }
+
+  function render(view) {
+    shown = view;
+    heading.textContent = headingFor(view);
+    const data = view.result.structuredContent || {};
+    const notes = [data.reading, data.note];
+    if (typeof data.catalog_matches === "number") notes.push(`${data.catalog_matches} catalog matches`);
+    reading.textContent = notes.filter(Boolean).join(" · ");
+    back.hidden = earlier.length === 0;
+    wall.replaceChildren();
+    const results = view.result.isError ? [] : data.results || [];
+    results.forEach((item) => wall.append(card(item)));
+    empty.hidden = results.length > 0;
+    if (view.result.isError) {
+      const text = (view.result.content || []).map((part) => part.text).filter(Boolean).join(" ");
+      empty.textContent = text || "The search did not work.";
+    }
+  }
+
+  function moreLike(item) {
+    request("tools/call", { name: "find_similar", arguments: { id: item.id, limit: 12 } })
+      .then((result) => {
+        earlier.push(shown);
+        render({ result, similarTo: item.title || "this uncataloged image" });
+        window.scrollTo(0, 0);
+      })
+      .catch(() => {
+        canCallTools = false;
+        render(shown);
+      });
+  }
+
+  back.addEventListener("click", () => {
+    if (earlier.length) render(earlier.pop());
+  });
+
+  window.addEventListener("message", (event) => {
+    if (event.source !== window.parent) return;
+    const message = event.data;
+    if (!message || message.jsonrpc !== "2.0") return;
+    if (message.method === undefined && pending.has(message.id)) {
+      const waiting = pending.get(message.id);
+      pending.delete(message.id);
+      if (message.error) waiting.reject(message.error);
+      else waiting.resolve(message.result);
+      return;
+    }
+    if (message.method === "ui/notifications/tool-input") {
+      question = (message.params && message.params.arguments) || null;
+      if (!shown) heading.textContent = headingFor({});
+    } else if (message.method === "ui/notifications/tool-result") {
+      earlier.length = 0;
+      render({ result: message.params || {} });
+    } else if (message.method === "ui/notifications/host-context-changed") {
+      applyContext(message.params);
+    } else if (message.id !== undefined && message.method) {
+      post({ id: message.id, result: {} });
+    }
+  });
+
+  new ResizeObserver(() => {
+    notify("ui/notifications/size-changed", {
+      width: document.documentElement.scrollWidth,
+      height: document.documentElement.scrollHeight,
+    });
+  }).observe(document.body);
+
+  request("ui/initialize", {
+    appInfo: { name: "dce-image-wall", version: "1.0.0" },
+    appCapabilities: {},
+    protocolVersion: "2025-06-18",
+  }).then((result) => {
+    applyContext(result && result.hostContext);
+    canCallTools = Boolean(result && result.hostCapabilities && result.hostCapabilities.serverTools);
+    notify("ui/notifications/initialized", {});
+  });
+</script>
+</body>
+</html>

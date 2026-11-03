@@ -52,6 +52,43 @@ def test_every_tool_only_reads():
     assert all(t.output_schema for t in tools)
 
 
+def test_lists_of_results_come_with_an_image_wall_for_hosts_that_show_apps():
+    from src.backend.api import mcp_server
+
+    async def run():
+        async with Client(mcp_server.server) as client:
+            tools = (await client.list_tools()).tools
+            resources = (await client.list_resources()).resources
+            page = await client.read_resource("ui://dce/wall.html")
+            return tools, resources, page
+
+    tools, resources, page = anyio.run(run)
+    walls = {t.name for t in tools if (t.meta or {}).get("ui")}
+    assert walls == {"search_collection", "find_similar", "search_by_image"}
+    assert {t.meta["ui"]["resourceUri"] for t in tools if t.name in walls} == {
+        "ui://dce/wall.html"
+    }
+    assert [(r.uri, r.mime_type) for r in resources] == [
+        ("ui://dce/wall.html", "text/html;profile=mcp-app")
+    ]
+    assert "ui/initialize" in page.contents[0].text
+    assert "never pair a title" in mcp_server.INSTRUCTIONS
+
+
+def test_the_wall_may_load_pictures_only_from_the_sites_own_address(monkeypatch):
+    from src.backend.api import mcp_server
+    from src.backend.core.config import settings
+
+    def allowed():
+        meta = mcp_server.image_wall().resources()[0].resource.meta or {}
+        return meta.get("ui", {}).get("csp", {}).get("resourceDomains")
+
+    monkeypatch.setattr(settings, "public_url", "https://collection.example.org/maps")
+    assert allowed() == ["https://collection.example.org"]
+    monkeypatch.setattr(settings, "public_url", "")
+    assert allowed() is None
+
+
 def test_the_collection_is_described_with_its_groups():
     summary = call("describe_collection").structured_content
     assert [(g["id"], g["label"]) for g in summary["groups"]] == [
