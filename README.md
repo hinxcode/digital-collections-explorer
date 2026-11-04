@@ -331,7 +331,7 @@ deploy/aws/deploy.sh my-collection --https --domain collection.example.org --cer
 To move a deployed site to a newer version without indexing again:
 
 ```bash
-deploy/aws/update.sh my-collection --image ghcr.io/hinxcode/digital-collections-explorer:next
+deploy/aws/update.sh my-collection --image ghcr.io/hinxcode/digital-collections-explorer:latest
 ```
 
 A collection prepared by your own pipeline, such as one split into groups (see above), needs no indexing on the machine at all. Copy the folder to a bucket in the region where the machine will run. A new deployment then starts from it with `--from` in place of `--source`: the machine is allowed to read that bucket, copies the folder, and opens the site.
