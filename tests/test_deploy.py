@@ -1026,3 +1026,29 @@ def test_cloudfront_caches_images_and_assets_under_the_base_path_too():
         {"If": ["HasBasePath", {"Sub": "${BasePath}/assets/*"}, "/assets/*"]},
     ]
 
+
+def test_a_failure_that_would_repeat_does_not_restart_the_site_forever():
+    script = (ROOT / "deploy/bootstrap.sh").read_text()
+    unit = script[script.index("[Service]") : script.index("[Install]")]
+    assert "Restart=always" in unit
+    assert "RestartPreventExitStatus=2 3" in unit
+
+
+def test_indexing_a_source_with_no_images_fails_for_good(tmp_path):
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "src.ingest",
+            str(empty),
+            "--data-dir",
+            str(tmp_path / "c"),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "No images found" in result.stdout

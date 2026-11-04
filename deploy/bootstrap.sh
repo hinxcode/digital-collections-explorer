@@ -218,6 +218,7 @@ ExecStart=$RUNNER
 ExecStop=/usr/bin/docker stop $SERVICE $SERVICE-ingest
 Restart=always
 RestartSec=10
+RestartPreventExitStatus=2 3
 
 [Install]
 WantedBy=multi-user.target
