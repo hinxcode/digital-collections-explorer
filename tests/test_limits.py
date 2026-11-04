@@ -158,6 +158,37 @@ def test_a_normal_image_is_searched(site):
     assert answer.json()["results"] == []
 
 
+def post_to(path, length=None):
+    from starlette.requests import Request
+
+    headers = [] if length is None else [(b"content-length", str(length).encode())]
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "scheme": "http",
+        "server": ("test", 80),
+        "path": path,
+        "root_path": "",
+        "query_string": b"",
+        "headers": headers,
+    }
+    return Request(scope)
+
+
+def test_requests_to_mcp_are_left_to_its_own_size_limit(site):
+    from fastapi import HTTPException
+
+    _, configure, _, limits = site
+    configure(max_upload_mb=1)
+    as_base64 = 1024 * 1024 * 4 // 3
+    limits.refuse_oversized_upload(post_to("/mcp", as_base64))
+    limits.refuse_oversized_upload(post_to("/maps/mcp", as_base64))
+    limits.refuse_oversized_upload(post_to("/mcp"))
+    with pytest.raises(HTTPException) as unsized:
+        limits.refuse_oversized_upload(post_to("/api/search/image"))
+    assert unsized.value.status_code == 411
+
+
 def test_a_file_that_is_not_an_image_is_named_as_the_problem(site):
     client, _, _, _ = site
     answer = client.post("/api/search/image", files={"image": ("a.png", b"hello")})
