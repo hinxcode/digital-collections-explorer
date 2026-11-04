@@ -300,13 +300,13 @@ Resources:
           CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
           OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
         CacheBehaviors:
-          - PathPattern: /images/*
+          - PathPattern: !If [HasBasePath, !Sub "${BasePath}/images/*", /images/*]
             TargetOriginId: site
             ViewerProtocolPolicy: redirect-to-https
             AllowedMethods: [GET, HEAD]
             # Managed policy UseOriginCacheControlHeaders-QueryStrings.
             CachePolicyId: 4cc15a8a-d715-48a4-82b8-cc0b614638fe
-          - PathPattern: /assets/*
+          - PathPattern: !If [HasBasePath, !Sub "${BasePath}/assets/*", /assets/*]
             TargetOriginId: site
             ViewerProtocolPolicy: redirect-to-https
             AllowedMethods: [GET, HEAD]
