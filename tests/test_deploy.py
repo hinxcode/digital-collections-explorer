@@ -996,3 +996,59 @@ def test_bootstrap_install_takes_images_or_a_prepared_collection_not_both(import
     )
     assert result.returncode != 0
     assert "not both" in result.stderr
+
+
+def template_resources():
+    import yaml
+
+    class Template(yaml.SafeLoader):
+        pass
+
+    def intrinsic(loader, suffix, node):
+        if isinstance(node, yaml.ScalarNode):
+            value = loader.construct_scalar(node)
+        elif isinstance(node, yaml.SequenceNode):
+            value = loader.construct_sequence(node, deep=True)
+        else:
+            value = loader.construct_mapping(node, deep=True)
+        return {suffix: value}
+
+    Template.add_multi_constructor("!", intrinsic)
+    text = (ROOT / "deploy/aws/template.yaml").read_text()
+    return yaml.load(text, Loader=Template)["Resources"]
+
+
+def test_cloudfront_caches_images_and_assets_under_the_base_path_too():
+    distribution = template_resources()["Distribution"]["Properties"]
+    behaviors = distribution["DistributionConfig"]["CacheBehaviors"]
+    assert [b["PathPattern"] for b in behaviors] == [
+        {"If": ["HasBasePath", {"Sub": "${BasePath}/images/*"}, "/images/*"]},
+        {"If": ["HasBasePath", {"Sub": "${BasePath}/assets/*"}, "/assets/*"]},
+    ]
+
+
+def test_a_failure_that_would_repeat_does_not_restart_the_site_forever():
+    script = (ROOT / "deploy/bootstrap.sh").read_text()
+    unit = script[script.index("[Service]") : script.index("[Install]")]
+    assert "Restart=always" in unit
+    assert "RestartPreventExitStatus=2 3" in unit
+
+
+def test_indexing_a_source_with_no_images_fails_for_good(tmp_path):
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "src.ingest",
+            str(empty),
+            "--data-dir",
+            str(tmp_path / "c"),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "No images found" in result.stdout

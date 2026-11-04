@@ -14,6 +14,7 @@ QUEUE_SECONDS = 15
 UPLOAD_CHUNK_BYTES = 1024 * 1024
 # Bytes of form fields and boundaries that surround the image in an upload.
 UPLOAD_FORM_OVERHEAD_BYTES = 64 * 1024
+MCP_PATH = "/mcp"
 MAX_UPLOAD_PIXELS = 50_000_000
 
 
@@ -117,7 +118,7 @@ async def read_upload(upload: UploadFile) -> bytes:
 
 def refuse_oversized_upload(request: Request) -> None:
     """Turn an upload away from its headers alone, before any of it is stored"""
-    if request.method != "POST":
+    if request.method != "POST" or request.url.path.rstrip("/").endswith(MCP_PATH):
         return
     limit_mb = site_settings()["max_upload_mb"]
     if not limit_mb:

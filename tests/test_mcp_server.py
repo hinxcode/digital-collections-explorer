@@ -270,3 +270,25 @@ def test_the_endpoint_answers_over_http_with_links_to_the_public_address(monkeyp
     app = Starlette(routes=mcp_server.http_routes())
     seen_there = anyio.run(run).structured_content["results"][0]
     assert seen_there["page"] == "https://collection.example.org/#/item/b1"
+
+
+def test_the_endpoint_refuses_requests_over_four_megabytes():
+    from src.backend.api import mcp_server
+
+    async def run(app):
+        async with mcp_server.server.session_manager.run():
+            transport = httpx2.ASGITransport(app=app)
+            async with httpx2.AsyncClient(
+                transport=transport, base_url="http://mcp.test"
+            ) as http:
+                return await http.post(
+                    "/mcp",
+                    content=b"x" * (4 * 1024 * 1024 + 1),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json, text/event-stream",
+                    },
+                )
+
+    answer = anyio.run(run, Starlette(routes=mcp_server.http_routes()))
+    assert answer.status_code == 413

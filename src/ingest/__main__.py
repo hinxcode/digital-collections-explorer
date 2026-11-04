@@ -206,7 +206,7 @@ def main() -> int:
     if not refs:
         print("No images found.")
         state.close()
-        return 1
+        return 2
 
     ids = [make_item_id(ref.key) for ref in refs]
     state.seed([(item_id, ref.key, ref.size) for item_id, ref in zip(ids, refs)])

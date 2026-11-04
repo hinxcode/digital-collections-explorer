@@ -388,6 +388,24 @@ def test_search_requests_can_name_the_groups_to_search(site):
     assert [r["id"] for r in answer.json()["results"]] == ["b1", "b2"]
 
 
+def test_similar_images_are_found_off_the_event_loop(site, grouped, monkeypatch):
+    import asyncio
+
+    where = []
+
+    def similar(*args):
+        try:
+            asyncio.get_running_loop()
+            where.append("event loop")
+        except RuntimeError:
+            where.append("worker thread")
+        return []
+
+    monkeypatch.setattr(grouped, "similar", similar)
+    assert site.get("/api/items/a1/similar").status_code == 200
+    assert where == ["worker thread"]
+
+
 def test_an_unknown_group_is_named_in_the_error(site):
     answer = site.get("/api/search/text?query=quilt&groups=east,nowhere")
     assert answer.status_code == 400

@@ -1,3 +1,5 @@
+import pytest
+
 from src.backend.services.index_info import describe_mismatch, write_index_info
 
 CLIP = "openai/clip-vit-base-patch32"
@@ -47,6 +49,24 @@ def test_config_that_only_names_a_legacy_clip_model_stays_on_clip(tmp_path):
 
     loaded = load_config(write_config(tmp_path, {"clip_model": CLIP}))
     assert (loaded.model_type.value, loaded.model_name) == ("clip", CLIP)
+
+
+@pytest.mark.parametrize(
+    "name, model_type",
+    [
+        ("openai/clip-vit-large-patch14", "clip"),
+        ("google/siglip2-base-patch16-224", "siglip2"),
+        ("google/siglip-so400m-patch14-384", "siglip"),
+        ("someone/another-model", "siglip"),
+    ],
+)
+def test_a_config_that_names_only_the_model_gets_its_type_from_the_name(
+    tmp_path, name, model_type
+):
+    from src.backend.core.config import load_config
+
+    loaded = load_config(write_config(tmp_path, {"model_name": name}))
+    assert (loaded.model_type.value, loaded.model_name) == (model_type, name)
 
 
 def test_choosing_clip_without_a_name_gets_the_clip_default(tmp_path):
