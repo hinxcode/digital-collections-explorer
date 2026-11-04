@@ -2,6 +2,7 @@ import logging
 from typing import Literal, Optional, Set
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.concurrency import run_in_threadpool
 
 from ...services.catalog_filter import catalog_values
 from ...services.collection_service import collection_service
@@ -60,8 +61,8 @@ async def get_similar_items(
     records: Optional[Set[str]] = Depends(records_in_query),
 ):
     """Images of other objects that look most like this one."""
-    results = collection_service.similar(
-        item_id, limit, checked_groups(groups), records
+    results = await run_in_threadpool(
+        collection_service.similar, item_id, limit, checked_groups(groups), records
     )
     if results is None:
         raise HTTPException(status_code=404, detail=f"Item {item_id} not found")
