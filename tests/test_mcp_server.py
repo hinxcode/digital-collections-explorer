@@ -9,6 +9,7 @@ from mcp.client.streamable_http import streamable_http_client
 from PIL import Image
 from starlette.applications import Starlette
 
+from tests.test_catalog_filter import add_catalog_values
 from tests.test_grouped_collection import (  # noqa: F401
     FLICKR_PAGE,
     PAGE,
@@ -46,6 +47,7 @@ def test_every_tool_only_reads():
         "search_collection",
         "find_similar",
         "search_by_image",
+        "list_catalog_values",
         "get_object",
     ]
     assert all(t.annotations.read_only_hint for t in tools)
@@ -162,6 +164,49 @@ def test_similar_objects_can_come_from_some_groups_only():
     assert [r["id"] for r in similar["results"]] == ["b1", "b2"]
 
 
+def with_catalog_values():
+    from src.backend.api.routes import browse
+
+    add_catalog_values(browse.collection_service.embeddings.embeddings_dir)
+
+
+def test_searches_can_keep_objects_with_some_catalog_values():
+    assert not call("describe_collection").structured_content["catalog_filters"]
+    assert call(
+        "search_collection", {"query": "quilt", "catalog": {"place": ["Ohio"]}}
+    ).is_error
+    with_catalog_values()
+    assert call("describe_collection").structured_content["catalog_filters"]
+    ohio = call("search_collection", {"query": "quilt", "catalog": {"place": ["Ohio"]}})
+    assert [r["object_id"] for r in ohio.structured_content["results"]] == ["rec-a"]
+    early = call(
+        "find_similar", {"id": "a1", "catalog": {"year_from": 1850, "year_to": 1869}}
+    )
+    assert [r["id"] for r in early.structured_content["results"]] == ["b1"]
+    backwards = call(
+        "search_collection",
+        {"query": "quilt", "catalog": {"year_from": 1900, "year_to": 1800}},
+    )
+    assert backwards.is_error and "year_from" in backwards.content[0].text
+
+
+def test_the_catalog_values_to_filter_by_can_be_listed():
+    with_catalog_values()
+    listed = call("list_catalog_values", {"category": "topic", "contains": "quilt"})
+    assert listed.structured_content == {
+        "category": "topic",
+        "values": [{"value": "Quilts", "records": 1}],
+    }
+    assert call("list_catalog_values", {"category": "color"}).is_error
+
+
+def test_the_instructions_explain_query_fields_and_catalog_filters():
+    from src.backend.api import mcp_server
+
+    assert "date:1860s" in mcp_server.INSTRUCTIONS
+    assert "list_catalog_values" in mcp_server.INSTRUCTIONS
+
+
 @pytest.fixture()
 def stored_images(monkeypatch):
     from src.backend.api.routes import search
@@ -184,6 +229,9 @@ def test_a_collection_image_or_part_of_it_can_be_the_query(stored_images):
     assert [r["id"] for r in part.structured_content["results"]] == ["b1"]
     too_small = {"left": 0.0, "top": 0.0, "width": 0.1, "height": 0.1}
     assert call("search_by_image", {"id": "a1", "crop": too_small}).is_error
+    with_catalog_values()
+    english = call("search_by_image", {"id": "a1", "catalog": {"place": ["England"]}})
+    assert [r["id"] for r in english.structured_content["results"]] == ["a3"]
 
 
 def test_an_image_of_the_assistants_own_can_be_the_query(stored_images):

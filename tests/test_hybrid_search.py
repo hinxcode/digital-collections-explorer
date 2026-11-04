@@ -180,6 +180,22 @@ def test_the_group_filter_applies_to_catalog_matches(hybrid):
     }, "counts ignore the filter"
 
 
+def test_catalog_values_narrow_both_channels(hybrid):
+    found = run(hybrid, "quilt", records={"rec-c"})
+    assert objects(found) == ["rec-c"]
+    assert found["search"]["keyword"]["records"] == 1
+
+
+def test_catalog_values_that_leave_no_catalog_match_say_so(hybrid):
+    found = run(hybrid, "quilt", mode="keyword", records={"rec-b"})
+    assert found["results"] == []
+    assert found["search"]["keyword"]["empty"]["kind"] == "filtered_out"
+    grouped_out = run(
+        hybrid, "quilt", mode="keyword", groups=["west"], records={"rec-a"}
+    )
+    assert grouped_out["search"]["keyword"]["empty"]["kind"] == "outside_groups"
+
+
 @pytest.mark.parametrize(
     "query, kind",
     [
@@ -329,7 +345,7 @@ def client_for(service, monkeypatch, tmp_path):
         lambda: object(),
     )
     from src.backend import main
-    from src.backend.api import groups
+    from src.backend.api import categories, groups
     from src.backend.api.routes import browse, search
     from src.backend.core import site_settings
     from src.backend.services import limits
@@ -337,7 +353,7 @@ def client_for(service, monkeypatch, tmp_path):
     monkeypatch.setattr(search, "model_service", FixedModel())
     monkeypatch.setattr(search, "embedding_service", service.embeddings)
     monkeypatch.setattr(search, "hybrid_search", HybridSearch(service))
-    for module in (search, browse, groups):
+    for module in (search, browse, groups, categories):
         monkeypatch.setattr(module, "collection_service", service)
     monkeypatch.setattr(site_settings.settings, "data_dir", str(tmp_path))
     monkeypatch.setattr(limits, "allowance", limits.SearchAllowance())

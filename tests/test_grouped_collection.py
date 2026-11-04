@@ -365,14 +365,14 @@ def site(grouped, monkeypatch, tmp_path):
         lambda: object(),
     )
     from src.backend import main
-    from src.backend.api import groups
+    from src.backend.api import categories, groups
     from src.backend.api.routes import browse, images, search
     from src.backend.core import site_settings
     from src.backend.services import limits
 
     monkeypatch.setattr(search, "model_service", FixedModel())
     monkeypatch.setattr(search, "embedding_service", grouped.embeddings)
-    for module in (search, browse, groups):
+    for module in (search, browse, groups, categories):
         monkeypatch.setattr(module, "collection_service", grouped)
     monkeypatch.setattr(images, "embedding_service", grouped.embeddings)
     monkeypatch.setattr(site_settings.settings, "data_dir", str(tmp_path))

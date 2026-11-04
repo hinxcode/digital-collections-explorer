@@ -1,6 +1,6 @@
 import logging
 from io import BytesIO
-from typing import Optional
+from typing import Optional, Set
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.concurrency import run_in_threadpool
@@ -20,6 +20,7 @@ from ...services.limits import (
 )
 from ...services.model_choice import choose_model
 from ...services.query_planner import SEARCH_MODES
+from ..categories import records_in_form, records_in_query
 from ..groups import GROUPS_DESCRIPTION, UNCATALOGED_DESCRIPTION, checked_groups
 
 choose_model(settings)
@@ -52,6 +53,7 @@ def ranked_results(
     groups=None,
     score_transform=None,
     cataloged_only=False,
+    records=None,
 ):
     if not embedding_service.is_loaded:
         embedding_service.load_embeddings()
@@ -64,6 +66,7 @@ def ranked_results(
         score_transform=score_transform,
         groups=groups,
         cataloged_only=cataloged_only,
+        records=records,
     )
     return SearchResponse(results=[SearchResult(**result) for result in raw_results])
 
@@ -105,6 +108,7 @@ async def search_by_text(
     ),
     correct_spelling: bool = Query(True, description=SPELLING_DESCRIPTION),
     uncataloged: bool = Query(True, description=UNCATALOGED_DESCRIPTION),
+    records: Optional[Set[str]] = Depends(records_in_query),
 ):
     """Search by text: by appearance and, when the collection keeps records, by catalog text."""
     wanted = checked_groups(groups)
@@ -125,6 +129,7 @@ async def search_by_text(
                 mode,
                 correct_spelling,
                 cataloged_only=not uncataloged,
+                records=records,
             )
             return SearchResponse(**found)
         embedding = model_service.encode_text(query)
@@ -136,6 +141,7 @@ async def search_by_text(
             wanted,
             score_transform=model_service.transform_score,
             cataloged_only=not uncataloged,
+            records=records,
         )
 
     async with search_queue.turn():
@@ -158,6 +164,7 @@ async def search_by_image(
     ),
     groups: Optional[str] = Form(None, description=GROUPS_DESCRIPTION),
     uncataloged: bool = Form(True, description=UNCATALOGED_DESCRIPTION),
+    records: Optional[Set[str]] = Depends(records_in_form),
 ):
     """Search for images like an uploaded one, scored by cosine similarity."""
     wanted = checked_groups(groups)
@@ -172,6 +179,7 @@ async def search_by_image(
             group_by_object,
             wanted,
             cataloged_only=not uncataloged,
+            records=records,
         )
 
     async with search_queue.turn():
