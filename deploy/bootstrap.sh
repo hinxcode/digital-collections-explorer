@@ -6,7 +6,7 @@ set -euo pipefail
 
 {
 
-IMAGE="ghcr.io/hinxcode/digital-collections-explorer:latest"
+IMAGE="ghcr.io/l4cch/digital-collections-explorer:latest"
 IMAGE_TAR=""
 DATA_ROOT="/opt/dce"
 NAME=""

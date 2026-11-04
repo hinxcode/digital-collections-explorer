@@ -43,7 +43,7 @@ if [ -z "$BOOTSTRAP_URL" ]; then
         BOOTSTRAP_URL=""
 fi
 [ -n "$BOOTSTRAP_URL" ] && [ "$BOOTSTRAP_URL" != "None" ] ||
-    BOOTSTRAP_URL="https://raw.githubusercontent.com/hinxcode/digital-collections-explorer/main/deploy/bootstrap.sh"
+    BOOTSTRAP_URL="https://raw.githubusercontent.com/L4CCH/digital-collections-explorer/main/deploy/bootstrap.sh"
 
 if [ "$SWITCH" = "on" ]; then
     echo "Turning MCP on for $NAME (machine $instance), with links to $site"

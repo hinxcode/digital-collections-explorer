@@ -19,7 +19,7 @@
   },
   "links": [
     { "label": "How this works (paper)", "url": "https://doi.org/10.1017/chr.2025.10017" },
-    { "label": "Source code", "url": "https://github.com/hinxcode/digital-collections-explorer" },
+    { "label": "Source code", "url": "https://github.com/L4CCH/digital-collections-explorer" },
     { "label": "Smithsonian Open Access", "url": "https://www.si.edu/openaccess" }
   ]
 }

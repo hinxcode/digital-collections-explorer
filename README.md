@@ -13,7 +13,7 @@ The [project site](https://digital-collections-explorer.com/) has a live demo an
 You need Python 3.10 or later and Node.js 20.19 or later.
 
 ```bash
-git clone https://github.com/hinxcode/digital-collections-explorer.git
+git clone https://github.com/L4CCH/digital-collections-explorer.git
 cd digital-collections-explorer
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
@@ -34,8 +34,8 @@ With an AI coding agent such as Claude Code, Codex, Gemini CLI or Cursor, ask it
 With Docker, one command builds the index and another serves it. The image is built for x86-64, so on Apple Silicon Docker runs it under emulation.
 
 ```bash
-docker run --rm -v "$PWD/my-collection:/data" -v /path/to/images:/source:ro ghcr.io/hinxcode/digital-collections-explorer ingest /source
-docker run -p 8000:8000 -v "$PWD/my-collection:/data" ghcr.io/hinxcode/digital-collections-explorer
+docker run --rm -v "$PWD/my-collection:/data" -v /path/to/images:/source:ro ghcr.io/l4cch/digital-collections-explorer ingest /source
+docker run -p 8000:8000 -v "$PWD/my-collection:/data" ghcr.io/l4cch/digital-collections-explorer
 ```
 
 On a Linux server, `deploy/bootstrap.sh` installs everything, indexes and keeps the site running across reboots. On AWS, `deploy/aws/deploy.sh` does the same on a machine it creates, after showing what it will cost.

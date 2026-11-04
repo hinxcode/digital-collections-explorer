@@ -3,7 +3,7 @@ import './SiteFooter.css';
 
 const DEFAULT_LINKS = [
   { label: 'How this works (paper)', url: 'https://doi.org/10.1017/chr.2025.10017' },
-  { label: 'Source code', url: 'https://github.com/hinxcode/digital-collections-explorer' },
+  { label: 'Source code', url: 'https://github.com/L4CCH/digital-collections-explorer' },
 ];
 
 function SiteFooter({ collection }) {

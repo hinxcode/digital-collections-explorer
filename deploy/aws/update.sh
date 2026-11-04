@@ -9,7 +9,7 @@ COMMAND_TIMEOUT=900
 
 REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-us-west-2}}"
 IMAGE=""
-BOOTSTRAP_URL="https://raw.githubusercontent.com/hinxcode/digital-collections-explorer/main/deploy/bootstrap.sh"
+BOOTSTRAP_URL="https://raw.githubusercontent.com/L4CCH/digital-collections-explorer/main/deploy/bootstrap.sh"
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
 

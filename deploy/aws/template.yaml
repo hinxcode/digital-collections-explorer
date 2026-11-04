@@ -106,10 +106,10 @@ Parameters:
       whose proxy forwards that path here. Set only when the machine is created.
   Image:
     Type: String
-    Default: ghcr.io/hinxcode/digital-collections-explorer:latest
+    Default: ghcr.io/l4cch/digital-collections-explorer:latest
   BootstrapUrl:
     Type: String
-    Default: https://raw.githubusercontent.com/hinxcode/digital-collections-explorer/main/deploy/bootstrap.sh
+    Default: https://raw.githubusercontent.com/L4CCH/digital-collections-explorer/main/deploy/bootstrap.sh
   MachineImageId:
     Type: AWS::EC2::Image::Id
     Description: Amazon Linux 2023 (x86_64) image for the machine. deploy.sh fills this in.

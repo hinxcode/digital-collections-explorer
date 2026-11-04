@@ -5,7 +5,7 @@ from html import escape
 from pathlib import Path
 from typing import Any, Dict
 
-PROJECT_URL = "https://github.com/hinxcode/digital-collections-explorer"
+PROJECT_URL = "https://github.com/L4CCH/digital-collections-explorer"
 PAPER_URL = "https://doi.org/10.1017/chr.2025.10017"
 
 ROBOTS_TXT = """\
