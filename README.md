@@ -39,7 +39,7 @@ The software is built by the [Lab for Computing Cultural Heritage](https://l4cch
 ### Prerequisites
 
 - Python 3.10+
-- Node.js 14+
+- Node.js 20.19+
 - Git
 - Docker (optional, for containerized deployment)
 
@@ -476,6 +476,10 @@ If you use Digital Collections Explorer in research, please cite the paper and t
   doi     = {10.1017/chr.2025.10017}
 }
 ```
+
+## License
+
+The source code of Digital Collections Explorer is licensed under the [BSD 3-Clause License](LICENSE). Documentation and original figures, such as `overview.png`, are licensed under [CC BY 4.0](LICENSE-docs) unless otherwise noted. Third-party code, models, data and media keep their respective licenses.
 
 ## Contributing
 
