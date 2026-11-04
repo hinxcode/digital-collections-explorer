@@ -15,6 +15,7 @@ from PIL import Image
 from src.backend.core.config import settings
 from src.backend.services.base_embedding_service import BaseEmbeddingService
 from src.backend.services.embedding_service_factory import create_embedding_service
+from src.backend.services.index_info import write_index_info
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -322,6 +323,13 @@ def main():
     torch.save(item_ids, item_ids_file)
     with open(metadata_file, "w") as f:
         json.dump(result.metadata, f, indent=2)
+    write_index_info(
+        EMBEDDINGS_DIR,
+        service.get_model_type(),
+        service.model_name,
+        embeddings_tensor.shape[1],
+        len(item_ids),
+    )
 
     logger.info(f"Saved {len(item_ids)} embeddings to {embeddings_file}")
     logger.info(f"Saved {len(item_ids)} item IDs to {item_ids_file}")

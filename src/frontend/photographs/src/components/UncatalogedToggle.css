@@ -1,0 +1,61 @@
+.uncataloged-toggle {
+  display: inline-flex;
+  gap: 0.55rem;
+  align-items: center;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.9rem;
+  color: #e6e1da;
+  border: 1px solid #4a4038;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.uncataloged-toggle:hover,
+.uncataloged-toggle:focus-within {
+  border-color: #8b5a2b;
+}
+
+.uncataloged-toggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+}
+
+.uncataloged-toggle-track {
+  position: relative;
+  flex: none;
+  width: 1.9rem;
+  height: 1.05rem;
+  background-color: #4a4038;
+  border-radius: 999px;
+  transition: background-color 0.2s ease;
+}
+
+.uncataloged-toggle-track::after {
+  content: '';
+  position: absolute;
+  top: 0.15rem;
+  left: 0.15rem;
+  width: 0.75rem;
+  height: 0.75rem;
+  background-color: #f8f5f0;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+}
+
+.uncataloged-toggle input:checked + .uncataloged-toggle-track {
+  background-color: #8b5a2b;
+}
+
+.uncataloged-toggle input:checked + .uncataloged-toggle-track::after {
+  transform: translateX(0.85rem);
+}
+
+.uncataloged-toggle input:focus-visible + .uncataloged-toggle-track {
+  outline: 2px solid #d0b49f;
+  outline-offset: 2px;
+}

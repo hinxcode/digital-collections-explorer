@@ -1,4 +1,5 @@
-const API_URL = import.meta.env.API_BASE_URL;
+const sitePath = () => window.location.pathname.replace(/\/index\.html$/, '').replace(/\/$/, '');
+const API_URL = import.meta.env.API_BASE_URL || sitePath();
 
 export const searchContent = async (query, limit = 30, page = 1) => {
   try {

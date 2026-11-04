@@ -1,4 +1,3 @@
-import json
 import logging
 import traceback
 from pathlib import Path
@@ -7,6 +6,8 @@ from typing import Any, Callable, Dict, List, Optional
 import torch
 
 from ..core.config import settings
+from .collection_store import load_grouped, load_single
+from .index_info import is_grouped, read_index_info
 
 logger = logging.getLogger(__name__)
 
@@ -19,55 +20,44 @@ class EmbeddingService:
         self.embeddings = None
         self.item_ids = None
         self.metadata = None
+        self.groups: List[Dict[str, Any]] = []
+        self.group_of_row: Optional[torch.Tensor] = None
         self.is_loaded = False
 
     def load_embeddings(self) -> None:
-        """Load embeddings from the embeddings directory"""
+        """Load the index, whether it is a single index or split into groups"""
         if self.is_loaded:
             logger.info("Embeddings already loaded")
             return
 
         try:
-            embeddings_path = self.embeddings_dir / "embeddings.pt"
-            item_ids_path = self.embeddings_dir / "item_ids.pt"
-            metadata_path = self.embeddings_dir / "metadata.json"
-
-            logger.info(f"Looking for embeddings at {embeddings_path}")
-            logger.info(f"Looking for item IDs at {item_ids_path}")
-            logger.info(f"Looking for metadata at {metadata_path}")
-
-            if embeddings_path.exists() and item_ids_path.exists():
-                self.embeddings = torch.load(embeddings_path, map_location="cpu")
-                self.item_ids = torch.load(item_ids_path)
-
-                if metadata_path.exists():
-                    with open(metadata_path, "r") as f:
-                        self.metadata = json.load(f)
-                else:
-                    self.metadata = {}
-                    logger.warning(
-                        "Metadata file not found, proceeding without metadata."
-                    )
-
-                logger.info(
-                    f"Loaded embeddings array with shape: {self.embeddings.shape}"
-                )
-                logger.info(f"Loaded {len(self.item_ids)} item IDs")
-                logger.info(f"Loaded metadata for {len(self.metadata)} items")
-
-                # Verify that counts match
-                if len(self.item_ids) != self.embeddings.shape[0]:
-                    logger.warning(
-                        f"Warning: Item IDs count ({len(self.item_ids)}) doesn't match embeddings count ({self.embeddings.shape[0]})"
-                    )
-
-                self.is_loaded = True
-                logger.info("Embeddings loaded successfully")
+            if is_grouped(read_index_info(self.embeddings_dir)):
+                loaded = load_grouped(self.embeddings_dir, settings.model_name)
             else:
-                if not embeddings_path.exists():
-                    logger.error(f"Embeddings file not found at {embeddings_path}")
-                if not item_ids_path.exists():
-                    logger.error(f"Item IDs file not found at {item_ids_path}")
+                loaded = load_single(self.embeddings_dir)
+            if loaded is None:
+                return
+
+            self.embeddings = loaded.embeddings
+            self.item_ids = loaded.item_ids
+            self.metadata = loaded.metadata
+            self.groups = loaded.groups
+            self.group_of_row = loaded.group_of_row
+
+            logger.info(f"Loaded embeddings array with shape: {self.embeddings.shape}")
+            logger.info(f"Loaded {len(self.item_ids)} item IDs")
+            logger.info(f"Loaded metadata for {len(self.metadata)} items")
+            if self.groups:
+                logger.info(f"Split into {len(self.groups)} groups")
+
+            # Verify that counts match
+            if len(self.item_ids) != self.embeddings.shape[0]:
+                logger.warning(
+                    f"Warning: Item IDs count ({len(self.item_ids)}) doesn't match embeddings count ({self.embeddings.shape[0]})"
+                )
+
+            self.is_loaded = True
+            logger.info("Embeddings loaded successfully")
         except Exception as e:
             logger.error(f"Error loading embeddings: {str(e)}")
             logger.error(traceback.format_exc())
@@ -99,6 +89,12 @@ class EmbeddingService:
 
         return None
 
+    def similarity_scores(self, query_embedding: torch.Tensor) -> torch.Tensor:
+        """Raw similarity of every item to the query, which is what ranking uses"""
+        if not self.is_loaded:
+            self.load_embeddings()
+        return torch.matmul(self.embeddings, query_embedding.t()).squeeze()
+
     def search(
         self,
         query_embedding: torch.Tensor,
@@ -109,11 +105,11 @@ class EmbeddingService:
         """Search by query embedding; optional score_transform on raw similarities."""
         try:
             scores = torch.matmul(self.embeddings, query_embedding.t()).squeeze()
-            if score_transform is not None:
-                scores = score_transform(scores)
 
             top_k = min(offset + limit, len(scores))
             top_scores, top_indices = torch.topk(scores, k=top_k)
+            if score_transform is not None:
+                top_scores = score_transform(top_scores)
 
             start_idx = min(offset, len(top_indices))
             end_idx = min(offset + limit, len(top_indices))

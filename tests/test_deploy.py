@@ -1,0 +1,1054 @@
+import base64
+import importlib.util
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).parent.parent
+
+
+@pytest.fixture(scope="module")
+def estimate_cost():
+    path = ROOT / "deploy" / "aws" / "estimate_cost.py"
+    spec = importlib.util.spec_from_file_location("estimate_cost", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_estimate_adds_up_the_monthly_parts(estimate_cost):
+    costs = {"machine": 30.0, "machine_hour": 0.04, "disk": 2.5, "address": 3.5}
+    text = estimate_cost.render(costs, "t3.medium", 30, "us-west-2")
+    assert "$36.00" in text
+
+
+def test_estimate_never_shows_a_total_it_cannot_back_up(estimate_cost):
+    costs = {"machine": None, "machine_hour": None, "disk": 2.5, "address": 3.5}
+    text = estimate_cost.render(costs, "t3.medium", 30, "us-west-2")
+    assert "price not found" in text
+    assert "Total per month" not in text
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        "deploy/bootstrap.sh",
+        "deploy/aws/deploy.sh",
+        "deploy/aws/status.sh",
+        "deploy/aws/update.sh",
+        "deploy/aws/describe.sh",
+        "deploy/aws/configure.sh",
+        "deploy/aws/import.sh",
+        "deploy/aws/mcp.sh",
+    ],
+)
+def test_scripts_parse_and_explain_themselves(script):
+    path = ROOT / script
+    assert subprocess.run(["bash", "-n", str(path)]).returncode == 0
+    assert path.stat().st_mode & 0o111, f"{script} must be executable"
+
+
+def test_bootstrap_rejects_unsafe_collection_names():
+    result = subprocess.run(
+        ["bash", str(ROOT / "deploy/bootstrap.sh"), "status", "--name", "Bad Name!"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "lowercase" in result.stderr
+
+
+def test_deploy_never_prints_the_full_account_id():
+    script = (ROOT / "deploy/aws/deploy.sh").read_text()
+    printed = [
+        line for line in script.splitlines() if "echo" in line and "ACCOUNT" in line
+    ]
+    assert printed, "the account should still be identified to the person deploying"
+    assert all("${ACCOUNT: -4}" in line for line in printed)
+
+
+FAKE_AWS = r"""#!/usr/bin/env bash
+echo "$*" >> "$FAKE_AWS_LOG"
+case "$*" in
+*"sts get-caller-identity"*) echo "123456789012" ;;
+*"describe-stacks"*"InstanceId"*)
+    [ "$FAKE_STACK_EXISTS" = "true" ] || grep -q "cloudformation deploy" "$FAKE_AWS_LOG" || exit 255
+    echo "i-0existing" ;;
+*"OutputKey=='SiteUrl'"*) echo "$FAKE_SITE_URL" ;;
+*"ParameterKey=='BootstrapUrl'"*) echo "https://example.org/bootstrap.sh" ;;
+*"describe-stacks"*"Parameters[]"*)
+    printf 'CollectionName\tdemo\n'
+    if [ -n "$FAKE_PREPARED_FROM" ]; then
+        printf 'Source\t\nPreparedFrom\t%s\n' "$FAKE_PREPARED_FROM"
+    else
+        printf 'Source\ts3://bucket/images\n'
+    fi
+    printf 'FetchVia\t\n'
+    printf 'AnonymousS3\ttrue\n'
+    printf 'SourceBucket\tprivate-bucket\n'
+    printf 'Limit\t0\n'
+    printf 'InstanceType\tc7i.2xlarge\n'
+    printf 'DiskSizeGiB\t40\n'
+    printf 'AllowedCidr\t198.51.100.0/24\n'
+    printf 'MonthlyBudgetUsd\t50\n'
+    printf 'BudgetEmail\tcurator@example.org\n'
+    printf 'Image\texample/image:1\n'
+    printf 'BootstrapUrl\thttps://example.org/bootstrap.sh\n'
+    printf 'PublicHttps\t%s\n' "${FAKE_HTTPS:-false}"
+    printf 'Domain\t%s\n' "$FAKE_DOMAIN"
+    printf 'CertificateArn\t%s\n' "$FAKE_CERTIFICATE"
+    printf 'BasePath\t%s\n' "$FAKE_BASE_PATH" ;;
+*"acm describe-certificate"*)
+    printf '%s\t%s\n' "$FAKE_CERTIFICATE_STATUS" "$FAKE_CERTIFICATE_NAMES" ;;
+*"describe-managed-prefix-lists"*) echo "pl-0cloudfront" ;;
+*"describe-instances"*"InstanceType"*) echo "c7i.2xlarge" ;;
+*"describe-instances"*) echo "ami-0existing111" ;;
+*"ssm send-command"*)
+    if [ "$(grep -c "ssm send-command" "$FAKE_AWS_LOG")" -le "${FAKE_NOT_READY_FOR:-0}" ]; then
+        exit 255
+    fi
+    echo "$*" > "$FAKE_AWS_LOG.last_command"
+    echo "command-1" ;;
+*"ssm get-command-invocation"*)
+    if grep -q -- "--json" "$FAKE_AWS_LOG.last_command"; then
+        [ "$FAKE_MACHINE" = "current" ] || { printf 'Failed\t'; exit 0; }
+        printf 'Success\t{"indexed": 3, "run": {"active_seconds": 60}}'
+    elif grep -q "describe --name" "$FAKE_AWS_LOG.last_command" && [ "$FAKE_MACHINE" = "old" ]; then
+        printf 'Failed\tUsage: bootstrap.sh <install|status|update|uninstall>'
+    else
+        printf 'Success\tIndexing: finished'
+    fi ;;
+*"ssm get-parameter"*) echo "ami-0latest999" ;;
+*"cloudformation deploy"*)
+    if [ -n "$FAKE_OVERWRITE_SCRIPT" ]; then
+        { head -c 3000 /dev/zero | tr '\0' '#'; echo; cat "$FAKE_OVERWRITE_SCRIPT"; } > "$FAKE_OVERWRITE_SCRIPT.new"
+        cat "$FAKE_OVERWRITE_SCRIPT.new" > "$FAKE_OVERWRITE_SCRIPT"
+    fi
+    echo "Successfully created/updated stack" ;;
+*) echo "SiteUrl http://203.0.113.10" ;;
+esac
+"""
+
+
+@pytest.fixture()
+def fake_deploy(tmp_path):
+    import shutil
+
+    scripts = tmp_path / "deploy" / "aws"
+    shutil.copytree(ROOT / "deploy" / "aws", scripts)
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    (fake_bin / "aws").write_text(FAKE_AWS)
+    (fake_bin / "aws").chmod(0o755)
+    (fake_bin / "python3").write_text(
+        "#!/usr/bin/env bash\n"
+        f'[ "$1" = "-c" ] && exec {sys.executable} "$@"\n'
+        "echo '  (cost estimate)'\n"
+    )
+    (fake_bin / "python3").chmod(0o755)
+    (fake_bin / "sleep").write_text("#!/usr/bin/env bash\n")
+    (fake_bin / "sleep").chmod(0o755)
+    (fake_bin / "curl").write_text(
+        "#!/usr/bin/env bash\n"
+        'case "$*" in\n'
+        '*/mcp*) printf "%s" "$FAKE_MCP_ANSWER" ;;\n'
+        "*/api/health*) printf 200 ;;\n"
+        "*) printf 000 ;;\n"
+        "esac\n"
+    )
+    (fake_bin / "curl").chmod(0o755)
+    log = tmp_path / "aws.log"
+
+    def run(
+        stack_exists,
+        *extra,
+        overwrite_while_running=False,
+        script="deploy.sh",
+        machine="current",
+        not_ready_for=0,
+        served_over_https=False,
+        source=("--source", "s3://bucket/images"),
+        prepared_from="",
+        domain="",
+        certificate="",
+        certificate_status="ISSUED",
+        certificate_names="collection.example.org",
+        base_path="",
+        site_url="https://d1example.cloudfront.net",
+        mcp_answer="400",
+    ):
+        import os
+
+        log.write_text("")
+        env = {
+            **os.environ,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "FAKE_AWS_LOG": str(log),
+            "FAKE_STACK_EXISTS": "true" if stack_exists else "false",
+            "FAKE_OVERWRITE_SCRIPT": (
+                str(scripts / "deploy.sh") if overwrite_while_running else ""
+            ),
+            "FAKE_MACHINE": machine,
+            "FAKE_NOT_READY_FOR": str(not_ready_for),
+            "FAKE_HTTPS": "true" if served_over_https else "false",
+            "FAKE_PREPARED_FROM": prepared_from,
+            "FAKE_DOMAIN": domain,
+            "FAKE_CERTIFICATE": certificate,
+            "FAKE_CERTIFICATE_STATUS": certificate_status,
+            "FAKE_CERTIFICATE_NAMES": certificate_names,
+            "FAKE_BASE_PATH": base_path,
+            "FAKE_SITE_URL": site_url,
+            "FAKE_MCP_ANSWER": mcp_answer,
+        }
+        if script != "deploy.sh":
+            command = ["bash", str(scripts / script), "demo", *extra]
+            result = subprocess.run(command, capture_output=True, text=True, env=env)
+            return result, log.read_text().splitlines()
+        command = ["bash", str(scripts / "deploy.sh"), "demo", "--yes"]
+        if not stack_exists:
+            command += [*source, "--disk-gib", "40"]
+        command += extra
+        result = subprocess.run(command, capture_output=True, text=True, env=env)
+        deploys = [
+            c for c in log.read_text().splitlines() if "cloudformation deploy" in c
+        ]
+        return result, deploys
+
+    return run
+
+
+def test_new_deployment_pins_the_latest_machine_image(fake_deploy):
+    result, deploys = fake_deploy(False)
+    assert result.returncode == 0, result.stderr
+    assert "MachineImageId=ami-0latest999" in deploys[0]
+
+
+def test_update_keeps_the_image_the_machine_already_runs(fake_deploy):
+    result, deploys = fake_deploy(True, "--instance-type", "t3.medium")
+    assert result.returncode == 0, result.stderr
+    assert "MachineImageId=ami-0existing111" in deploys[0]
+    assert "ami-0latest999" not in deploys[0]
+    assert "InstanceType=t3.medium" in deploys[0]
+    assert "updated in place" in result.stdout
+
+
+def test_update_refuses_to_change_the_disk_because_that_deletes_the_index(fake_deploy):
+    result, deploys = fake_deploy(True, "--disk-gib", "80")
+    assert result.returncode != 0
+    assert deploys == []
+    assert "delete its index" in result.stderr
+
+
+CERTIFICATE = "arn:aws:acm:us-east-1:123456789012:certificate/0a1b2c3d-4e5f-6789-abcd-ef0123456789"
+DOMAIN = ("--domain", "collection.example.org", "--certificate-arn", CERTIFICATE)
+
+
+def test_a_domain_of_your_own_is_served_through_cloudfront_with_its_certificate(
+    fake_deploy,
+):
+    result, deploys = fake_deploy(False, "--https", *DOMAIN)
+    assert result.returncode == 0, result.stderr
+    assert "Domain=collection.example.org" in deploys[0]
+    assert f"CertificateArn={CERTIFICATE}" in deploys[0]
+    assert "https://collection.example.org" in result.stdout
+    assert "CNAME record" in result.stdout
+
+
+def test_a_wildcard_certificate_covers_a_domain_one_level_below(fake_deploy):
+    result, deploys = fake_deploy(
+        False, "--https", *DOMAIN, certificate_names="*.example.org example.org"
+    )
+    assert result.returncode == 0, result.stderr
+    assert "Domain=collection.example.org" in deploys[0]
+
+
+@pytest.mark.parametrize(
+    "extra, certificate, said",
+    [
+        (DOMAIN, {}, "needs --https"),
+        (("--https", "--domain", "collection.example.org"), {}, "request-certificate"),
+        (
+            (
+                "--https",
+                "--domain",
+                "collection.example.org",
+                "--certificate-arn",
+                CERTIFICATE.replace("us-east-1", "us-west-2"),
+            ),
+            {},
+            "us-east-1",
+        ),
+        (
+            ("--https", *DOMAIN),
+            {"certificate_status": "PENDING_VALIDATION"},
+            "PENDING_VALIDATION",
+        ),
+        (
+            ("--https", *DOMAIN),
+            {"certificate_names": "other.example.org"},
+            "not collection.example.org",
+        ),
+        (("--https", "--certificate-arn", CERTIFICATE), {}, "only applies together"),
+        (("--https", *DOMAIN, "--no-domain"), {}, "not both"),
+    ],
+)
+def test_a_domain_is_refused_until_it_can_actually_be_served(
+    fake_deploy, extra, certificate, said
+):
+    result, deploys = fake_deploy(False, *extra, **certificate)
+    assert result.returncode != 0
+    assert deploys == []
+    assert said in result.stderr
+
+
+def test_an_update_keeps_the_domain_until_told_to_drop_it(fake_deploy):
+    current = {
+        "served_over_https": True,
+        "domain": "collection.example.org",
+        "certificate": CERTIFICATE,
+    }
+    result, deploys = fake_deploy(True, "--instance-type", "t3.large", **current)
+    assert result.returncode == 0, result.stderr
+    assert "Domain=collection.example.org" in deploys[0]
+    result, deploys = fake_deploy(True, "--no-domain", **current)
+    assert result.returncode == 0, result.stderr
+    assert "Domain= " in deploys[0] + " "
+    assert "collection.example.org -> none" in result.stdout
+    result, deploys = fake_deploy(True, "--no-https", **current)
+    assert result.returncode != 0
+    assert "--no-domain" in result.stderr
+
+
+def test_a_site_can_answer_under_a_path_for_a_website_of_your_own(fake_deploy):
+    result, deploys = fake_deploy(False, "--base-path", "explorer/")
+    assert result.returncode == 0, result.stderr
+    assert "BasePath=/explorer" in deploys[0]
+    assert "answers under /explorer" in result.stdout
+    result, deploys = fake_deploy(False, "--base-path", "/an explorer")
+    assert result.returncode != 0
+    assert deploys == []
+
+
+def test_the_path_is_kept_and_cannot_change_once_the_machine_exists(fake_deploy):
+    result, deploys = fake_deploy(
+        True, "--instance-type", "t3.large", base_path="/explorer"
+    )
+    assert result.returncode == 0, result.stderr
+    assert "BasePath=/explorer" in deploys[0]
+    result, deploys = fake_deploy(True, "--base-path", "/other", base_path="/explorer")
+    assert result.returncode != 0
+    assert deploys == []
+    assert "only applies when a machine is first created" in result.stderr
+
+
+def test_mcp_turns_on_with_links_to_the_sites_own_address(fake_deploy):
+    site = "https://collection.example.org/explorer"
+    result, log = fake_deploy(True, "--on", script="mcp.sh", site_url=site)
+    assert result.returncode == 0, result.stderr
+    sent = [c for c in log if "ssm send-command" in c]
+    assert f"mcp --name demo --on --public-url {site}" in sent[0]
+    assert "https://example.org/bootstrap.sh" in sent[0]
+    assert f"claude mcp add --transport http demo {site}/mcp" in result.stdout
+
+
+def test_mcp_says_when_the_site_runs_a_version_without_it(fake_deploy):
+    result, _ = fake_deploy(True, "--on", script="mcp.sh", mcp_answer="404")
+    assert result.returncode != 0
+    assert "update.sh" in result.stderr
+
+
+def test_mcp_can_be_turned_off(fake_deploy):
+    result, log = fake_deploy(True, "--off", script="mcp.sh")
+    assert result.returncode == 0, result.stderr
+    assert any("mcp --name demo --off" in c for c in log)
+
+
+def test_deploy_can_turn_mcp_on_once_the_site_is_there(fake_deploy):
+    result, deploys = fake_deploy(False, "--https", "--mcp")
+    assert result.returncode == 0, result.stderr
+    assert "also answers AI assistants at /mcp" in result.stdout
+    assert "Turning MCP on for demo" in result.stdout
+
+
+def test_changing_the_address_reminds_to_point_mcp_at_it(fake_deploy):
+    result, _ = fake_deploy(True, "--https")
+    assert result.returncode == 0, result.stderr
+    assert "deploy/aws/mcp.sh demo --on" in result.stdout
+
+
+RUNNER = """#!/usr/bin/env bash
+set -euo pipefail
+
+docker rm -f dce-demo >/dev/null 2>&1 || true
+exec docker run --rm --name dce-demo \\
+    -p 80:8000 -e DCE_COLLECTION=demo -e DCE_BASE_PATH=/x \\
+    -v "/opt/dce/collections/demo:/data" -v dce-models:/app/.cache/huggingface \\
+    "example/image:1" serve
+"""
+
+
+def test_bootstrap_switches_mcp_in_the_runner_and_reports_it(tmp_path):
+    import os
+
+    root = tmp_path / "dce"
+    (root / "collections" / "demo").mkdir(parents=True)
+    runner = root / "run-demo.sh"
+    runner.write_text(RUNNER)
+    runner.chmod(0o755)
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    for tool in ("docker", "systemctl"):
+        (fake_bin / tool).write_text("#!/usr/bin/env bash\n")
+        (fake_bin / tool).chmod(0o755)
+    env = {**os.environ, "PATH": f"{fake_bin}:{os.environ['PATH']}"}
+
+    def bootstrap(*args):
+        command = ["bash", str(ROOT / "deploy/bootstrap.sh"), *args]
+        command += ["--name", "demo", "--data-root", str(root)]
+        return subprocess.run(command, capture_output=True, text=True, env=env)
+
+    site = "https://c.example.org/x"
+    for _ in range(2):
+        on = bootstrap("mcp", "--on", "--public-url", site + "/")
+        assert on.returncode == 0, on.stderr
+    assert f"-e DCE_BASE_PATH=/x -e DCE_MCP=1 -e DCE_PUBLIC_URL={site} \\" in (
+        runner.read_text()
+    )
+    assert runner.read_text().count("DCE_MCP") == 1
+    assert f"MCP: on, at {site}/mcp" in bootstrap("status").stdout
+    off = bootstrap("mcp", "--off")
+    assert off.returncode == 0, off.stderr
+    assert "DCE_MCP" not in runner.read_text()
+    assert "DCE_PUBLIC_URL" not in runner.read_text()
+    assert "-e DCE_BASE_PATH=/x \\" in runner.read_text()
+    assert "MCP: off" in bootstrap("status").stdout
+    refused = bootstrap("mcp", "--on", "--public-url", "javascript:alert(1)")
+    assert refused.returncode != 0
+
+
+def test_script_survives_being_saved_while_it_waits_for_aws(fake_deploy):
+    result, deploys = fake_deploy(False, overwrite_while_running=True)
+    assert result.returncode == 0, result.stderr
+    assert "command not found" not in result.stderr
+    assert "SiteUrl" in result.stdout
+
+
+@pytest.fixture(scope="module")
+def run_cost():
+    import sys
+
+    sys.path.insert(0, str(ROOT / "deploy" / "aws"))
+    path = ROOT / "deploy" / "aws" / "run_cost.py"
+    spec = importlib.util.spec_from_file_location("run_cost", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+PRICES = {"c7i.2xlarge": 0.357, "t3.medium": 0.0416}
+FINISHED_REPORT = {
+    "indexed": 20481,
+    "run": {
+        "active_seconds": 5400,
+        "machine_type": "c7i.2xlarge",
+        "finished_at": "2026-09-20T20:00:00Z",
+    },
+}
+
+
+def test_indexing_is_priced_per_run_and_per_thousand_images(run_cost):
+    lines = run_cost.cost_lines(FINISHED_REPORT, "t3.medium", None, PRICES.get)
+    text = "\n".join(lines)
+    assert "Indexing cost about $0.54" in text
+    assert "1.5 hours on c7i.2xlarge" in text
+    assert "$0.026 per 1,000 images" in text
+    assert "WARNING" not in text
+
+
+def test_a_large_machine_left_running_after_indexing_is_pointed_out(run_cost):
+    from datetime import datetime, timezone
+
+    now = datetime(2026, 9, 21, 1, 0, tzinfo=timezone.utc)
+    lines = run_cost.cost_lines(FINISHED_REPORT, "c7i.2xlarge", None, PRICES.get, now)
+    warning = [line for line in lines if line.startswith("WARNING")][0]
+    assert "finished 5 hours ago" in warning
+    assert "$230.24 per month" in warning
+    assert "--instance-type t3.medium" in warning
+
+
+def test_an_unrecorded_indexing_machine_can_be_named_by_hand(run_cost):
+    report = {"indexed": 10, "run": {"active_seconds": 3600, "machine_type": None}}
+    unknown = run_cost.cost_lines(report, "t3.medium", None, PRICES.get)
+    assert any("--indexed-on" in line for line in unknown)
+    named = run_cost.cost_lines(report, "t3.medium", "c7i.2xlarge", PRICES.get)
+    assert any("Indexing cost about $0.36" in line for line in named)
+
+
+def test_a_collection_prepared_elsewhere_costs_only_the_running_machine(run_cost):
+    report = {"prepared_from": "s3://my-bucket/dce/20261012T063839Z.3"}
+    lines = run_cost.cost_lines(report, "t3.medium", None, PRICES.get)
+    assert [line for line in lines if line.startswith("Running now: t3.medium")]
+    assert not [line for line in lines if "Indexing" in line]
+
+
+def test_status_prices_the_run_when_the_machine_can_report_it(fake_deploy):
+    result, _ = fake_deploy(True, script="status.sh")
+    assert result.returncode == 0, result.stderr
+    assert "c7i.2xlarge" in result.stdout
+    assert "(cost estimate)" in result.stdout
+
+
+def test_status_says_how_to_update_a_machine_too_old_to_report(fake_deploy):
+    result, _ = fake_deploy(True, script="status.sh", machine="old")
+    assert result.returncode == 0, result.stderr
+    assert "older version" in result.stdout
+    assert "update.sh demo" in result.stdout
+
+
+def test_update_refreshes_the_bootstrap_script_before_switching_images(fake_deploy):
+    result, _ = fake_deploy(True, "--image", "example/image:2", script="update.sh")
+    assert result.returncode == 0, result.stderr
+    assert "The index and the address are kept" in result.stdout
+
+
+DESCRIPTION = {"title": "Demo Museum", "example_queries": ["a quilt"]}
+
+
+@pytest.fixture()
+def description(tmp_path):
+    path = tmp_path / "collection.json"
+    path.write_text(json.dumps(DESCRIPTION))
+    return path
+
+
+def sent_description(calls):
+    command = [c for c in calls if "ssm send-command" in c][-1]
+    encoded = command.split("--collection-base64 ")[1].split('"')[0]
+    return json.loads(base64.b64decode(encoded))
+
+
+def test_describe_sends_the_file_to_the_machine(fake_deploy, description):
+    result, calls = fake_deploy(True, "--file", str(description), script="describe.sh")
+    assert result.returncode == 0, result.stderr
+    assert sent_description(calls) == DESCRIPTION
+    assert "describe --name demo" in calls[-2]
+
+
+def test_describe_keeps_trying_while_a_new_machine_starts_up(fake_deploy, description):
+    result, calls = fake_deploy(
+        True, "--file", str(description), script="describe.sh", not_ready_for=3
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.count("not ready for it yet") == 3
+    assert sent_description(calls) == DESCRIPTION
+
+
+def test_describe_stops_at_once_when_the_machine_rejects_the_file(
+    fake_deploy, description
+):
+    result, calls = fake_deploy(
+        True, "--file", str(description), script="describe.sh", machine="old"
+    )
+    assert result.returncode != 0
+    assert "Usage: bootstrap.sh" in result.stderr
+    assert "keeps its previous description" in result.stderr
+    assert len([c for c in calls if "ssm send-command" in c]) == 1
+
+
+def test_describe_refuses_a_file_that_is_not_a_json_object(fake_deploy, tmp_path):
+    broken = tmp_path / "broken.json"
+    broken.write_text('{"title": ')
+    result, calls = fake_deploy(True, "--file", str(broken), script="describe.sh")
+    assert result.returncode != 0
+    assert "not a JSON object" in result.stderr
+    assert not any("ssm send-command" in c for c in calls)
+
+
+def test_deploy_delivers_the_description_once_the_machine_exists(
+    fake_deploy, description, tmp_path
+):
+    result, deploys = fake_deploy(False, "--collection-file", str(description))
+    assert result.returncode == 0, result.stderr
+    assert len(deploys) == 1
+    calls = (tmp_path / "aws.log").read_text().splitlines()
+    assert sent_description(calls) == DESCRIPTION
+    assert "Visitors see the new description" in result.stdout
+
+
+def test_deploy_creates_nothing_when_the_description_is_broken(fake_deploy, tmp_path):
+    broken = tmp_path / "broken.json"
+    broken.write_text("[]")
+    result, deploys = fake_deploy(False, "--collection-file", str(broken))
+    assert result.returncode != 0
+    assert deploys == []
+    assert "Nothing was changed" in result.stderr
+
+
+FAKE_DOCKER = """#!/usr/bin/env bash
+while [ "$1" != "python" ]; do
+    [ "$1" = "-v" ] && export DCE_DATA_DIR="${{2%%:*}}"
+    shift
+done
+shift
+cd {root}
+exec {python} "$@"
+"""
+
+
+@pytest.fixture()
+def installed_collection(tmp_path):
+    import os
+
+    data_root = tmp_path / "dce"
+    (data_root / "collections" / "demo").mkdir(parents=True)
+    (data_root / "run-demo.sh").write_text('docker run "example/image:1" serve\n')
+    fake_bin = tmp_path / "docker-bin"
+    fake_bin.mkdir()
+    fake_docker = FAKE_DOCKER.format(python=sys.executable, root=ROOT)
+    (fake_bin / "docker").write_text(fake_docker)
+    (fake_bin / "docker").chmod(0o755)
+    env = {**os.environ, "PATH": f"{fake_bin}:{os.environ['PATH']}"}
+
+    def run(name, *flags, action="describe"):
+        command = ["bash", str(ROOT / "deploy/bootstrap.sh"), action]
+        command += ["--name", name, "--data-root", str(data_root), *flags]
+        return subprocess.run(command, capture_output=True, text=True, env=env)
+
+    return run, data_root / "collections" / "demo" / "collection.json"
+
+
+def test_bootstrap_describe_replaces_the_description_of_a_running_site(
+    installed_collection, description
+):
+    run, placed = installed_collection
+    encoded = base64.b64encode(description.read_bytes()).decode()
+    result = run("demo", "--collection-base64", encoded)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(placed.read_text()) == DESCRIPTION
+    assert placed.stat().st_mode & 0o004, "the container user must be able to read it"
+    assert [p.name for p in placed.parent.iterdir()] == ["collection.json"]
+
+
+def test_bootstrap_describe_keeps_the_old_description_when_the_new_one_is_broken(
+    installed_collection, description, tmp_path
+):
+    run, placed = installed_collection
+    assert run("demo", "--collection-file", str(description)).returncode == 0
+    broken = tmp_path / "broken.json"
+    broken.write_text("not json")
+    result = run("demo", "--collection-file", str(broken))
+    assert result.returncode != 0
+    assert "not a JSON object" in result.stderr
+    assert json.loads(placed.read_text()) == DESCRIPTION
+    assert [p.name for p in placed.parent.iterdir()] == ["collection.json"]
+
+
+def test_bootstrap_describe_refuses_a_collection_that_is_not_installed(
+    installed_collection, description
+):
+    run, _ = installed_collection
+    result = run("other", "--collection-file", str(description))
+    assert result.returncode != 0
+    assert "no collection named other" in result.stderr
+
+
+def test_bootstrap_configure_changes_limits_and_keeps_the_others(installed_collection):
+    run, placed = installed_collection
+    saved = placed.with_name("settings.json")
+    assert run("demo", "--set", "max_upload_mb=20", action="configure").returncode == 0
+    result = run("demo", "--set", "proxy_hops=1", action="configure")
+    assert result.returncode == 0, result.stderr
+    assert json.loads(saved.read_text()) == {"max_upload_mb": 20, "proxy_hops": 1}
+
+
+def test_bootstrap_configure_refuses_a_setting_it_does_not_know(installed_collection):
+    run, placed = installed_collection
+    result = run("demo", "--set", "volume=11", action="configure")
+    assert result.returncode != 0
+    assert "unknown setting: volume" in result.stderr
+    assert not placed.with_name("settings.json").exists()
+
+
+def test_configure_sends_the_new_limits_to_the_machine(fake_deploy):
+    result, calls = fake_deploy(
+        True,
+        "--set",
+        "max_upload_mb=20",
+        "--set",
+        "proxy_hops=1",
+        script="configure.sh",
+    )
+    assert result.returncode == 0, result.stderr
+    sent = [c for c in calls if "ssm send-command" in c][-1]
+    assert "configure --name demo --set max_upload_mb=20 --set proxy_hops=1" in sent
+
+
+def test_configure_refuses_anything_that_is_not_a_number(fake_deploy):
+    result, calls = fake_deploy(
+        True, "--set", "proxy_hops=$(reboot)", script="configure.sh"
+    )
+    assert result.returncode != 0
+    assert "KEY=NUMBER" in result.stderr
+    assert not any("ssm send-command" in c for c in calls)
+
+
+def sent_commands(tmp_path):
+    calls = (tmp_path / "aws.log").read_text().splitlines()
+    return [c for c in calls if "ssm send-command" in c]
+
+
+def test_https_lets_only_cloudfront_reach_the_machine(fake_deploy, tmp_path):
+    result, deploys = fake_deploy(False, "--https")
+    assert result.returncode == 0, result.stderr
+    assert "PublicHttps=true" in deploys[0]
+    assert "CloudFrontPrefixList=pl-0cloudfront" in deploys[0]
+    assert "from CloudFront only" in result.stdout
+    assert "configure --name demo --set proxy_hops=1" in sent_commands(tmp_path)[-1]
+
+
+def test_a_plain_deployment_never_trusts_forwarded_addresses(fake_deploy, tmp_path):
+    result, deploys = fake_deploy(False)
+    assert result.returncode == 0, result.stderr
+    assert "PublicHttps=false" in deploys[0]
+    assert sent_commands(tmp_path) == []
+
+
+def test_https_cannot_be_combined_with_a_restricted_audience(fake_deploy):
+    result, deploys = fake_deploy(False, "--https", "--allowed-cidr", "10.0.0.0/8")
+    assert result.returncode != 0
+    assert deploys == []
+    assert "--allowed-cidr cannot be used" in result.stderr
+
+
+def test_an_update_never_drops_https_by_omission(fake_deploy):
+    result, deploys = fake_deploy(
+        True, "--instance-type", "t3.medium", served_over_https=True
+    )
+    assert result.returncode == 0, result.stderr
+    assert "PublicHttps=true" in deploys[0]
+
+
+def test_turning_https_off_stops_trusting_forwarded_addresses(fake_deploy, tmp_path):
+    result, deploys = fake_deploy(True, "--no-https", served_over_https=True)
+    assert result.returncode == 0, result.stderr
+    assert "PublicHttps=false" in deploys[0]
+    assert "configure --name demo --set proxy_hops=0" in sent_commands(tmp_path)[-1]
+
+
+def test_an_update_keeps_every_setting_that_is_left_out(fake_deploy):
+    result, deploys = fake_deploy(True, "--instance-type", "t3.medium")
+    assert result.returncode == 0, result.stderr
+    for kept in (
+        "Source=s3://bucket/images",
+        "AnonymousS3=true",
+        "SourceBucket=private-bucket",
+        "DiskSizeGiB=40",
+        "AllowedCidr=198.51.100.0/24",
+        "MonthlyBudgetUsd=50",
+        "BudgetEmail=curator@example.org",
+    ):
+        assert kept in deploys[0]
+    assert "Machine type: c7i.2xlarge -> t3.medium" in result.stdout
+    assert "Who may open the site" not in result.stdout
+
+
+def test_an_update_says_so_when_nothing_changes(fake_deploy):
+    result, deploys = fake_deploy(True)
+    assert result.returncode == 0, result.stderr
+    assert "None of its settings change" in result.stdout
+    assert "InstanceType=c7i.2xlarge" in deploys[0]
+
+
+def test_opening_the_site_to_everyone_has_to_be_asked_for(fake_deploy):
+    result, deploys = fake_deploy(True, "--allowed-cidr", "0.0.0.0/0")
+    assert result.returncode == 0, result.stderr
+    assert "AllowedCidr=0.0.0.0/0" in deploys[0]
+    assert "Who may open the site: 198.51.100.0/24 -> 0.0.0.0/0" in result.stdout
+
+
+def test_a_new_image_is_sent_to_update_instead_of_restarting_the_machine(fake_deploy):
+    result, deploys = fake_deploy(True, "--image", "example/image:2")
+    assert result.returncode != 0
+    assert deploys == []
+    assert "update.sh demo --image example/image:2" in result.stderr
+
+
+def test_repeating_the_image_the_machine_was_created_with_is_fine(fake_deploy):
+    result, deploys = fake_deploy(True, "--image", "example/image:1")
+    assert result.returncode == 0, result.stderr
+    assert "Image=" not in deploys[0]
+
+
+@pytest.mark.parametrize(
+    "flags",
+    [
+        ("--source", "s3://bucket/other"),
+        ("--from", "s3://my-bucket/other"),
+        ("--fetch-via", "s3://elsewhere"),
+        ("--limit", "500"),
+        ("--bootstrap-url", "https://example.org/other.sh"),
+    ],
+)
+def test_settings_that_only_matter_at_first_boot_cannot_change_later(
+    fake_deploy, flags
+):
+    result, deploys = fake_deploy(True, *flags)
+    assert result.returncode != 0
+    assert deploys == []
+    assert "only applies when a machine is first created" in result.stderr
+
+
+def test_a_restricted_site_cannot_be_kept_restricted_under_https(fake_deploy):
+    result, deploys = fake_deploy(
+        True, "--allowed-cidr", "10.0.0.0/8", served_over_https=True
+    )
+    assert result.returncode != 0
+    assert deploys == []
+
+
+PREPARED = "s3://my-bucket/dce/20261012T063839Z.3"
+
+
+def test_a_new_deployment_can_start_from_a_collection_prepared_elsewhere(fake_deploy):
+    result, deploys = fake_deploy(False, source=("--from", PREPARED))
+    assert result.returncode == 0, result.stderr
+    assert f"PreparedFrom={PREPARED}" in deploys[0]
+    assert " Source= " in deploys[0]
+    assert "SourceBucket=my-bucket" in deploys[0], "the machine must be let in"
+    assert f"copies the collection prepared in '{PREPARED}'" in result.stdout
+    assert "the machine can read my-bucket" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "source, reason",
+    [
+        (("--source", "s3://bucket/images", "--from", PREPARED), "not both"),
+        (("--from", PREPARED, "--source-bucket", "other-bucket"), "other-bucket"),
+        (("--from", PREPARED, "--limit", "500"), "only apply to --source"),
+        (("--from", "/home/me/prepared"), "s3://"),
+        (("--from", "s3://my-bucket/dce/$(reboot)"), "s3://"),
+    ],
+)
+def test_a_new_deployment_refuses_a_prepared_collection_it_could_not_copy(
+    fake_deploy, source, reason
+):
+    result, deploys = fake_deploy(False, source=source)
+    assert result.returncode != 0
+    assert deploys == []
+    assert reason in result.stderr
+
+
+def test_an_update_keeps_the_prepared_collection_the_machine_started_from(
+    fake_deploy,
+):
+    result, deploys = fake_deploy(
+        True, "--instance-type", "t3.medium", prepared_from=PREPARED
+    )
+    assert result.returncode == 0, result.stderr
+    assert f"PreparedFrom={PREPARED}" in deploys[0]
+    assert " Source= " in deploys[0]
+    assert f"copies the collection prepared in '{PREPARED}'" in result.stdout
+
+
+def test_import_sends_the_prepared_collection_to_the_machine(fake_deploy, tmp_path):
+    result, _ = fake_deploy(
+        True,
+        "--from",
+        "s3://my-bucket/dce/20261012T063839Z.3",
+        "--image",
+        "example/image:2",
+        script="import.sh",
+    )
+    assert result.returncode == 0, result.stderr
+    sent = sent_commands(tmp_path)[-1]
+    assert (
+        "import --name demo --from s3://my-bucket/dce/20261012T063839Z.3"
+        " --image example/image:2" in sent
+    )
+    assert "keeps its current data" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "source", ["/home/me/prepared", "s3://my-bucket/dce/$(reboot)", "s3://my bucket/x"]
+)
+def test_import_refuses_anything_but_a_plain_s3_address(fake_deploy, tmp_path, source):
+    result, _ = fake_deploy(True, "--from", source, script="import.sh")
+    assert result.returncode != 0
+    assert "s3://" in result.stderr
+    assert sent_commands(tmp_path) == []
+
+
+LOGGING_DOCKER = """#!/usr/bin/env bash
+echo "$*" >> "{log}"
+"""
+
+
+@pytest.fixture()
+def import_site(tmp_path):
+    import os
+
+    data_root = tmp_path / "dce"
+    current = data_root / "collections" / "demo"
+    (current / "embeddings").mkdir(parents=True)
+    (current / "embeddings" / "embeddings.pt").write_text("old index")
+    (current / "settings.json").write_text('{"max_upload_mb": 20}')
+    runner = data_root / "run-demo.sh"
+    runner.write_text('docker run "example/image:1" serve\n')
+    runner.chmod(0o755)
+    prepared = tmp_path / "prepared"
+    (prepared / "embeddings").mkdir(parents=True)
+    (prepared / "embeddings" / "index_info.json").write_text('{"format": 2}')
+    (prepared / "embeddings" / "metadata.sqlite").write_text("")
+    (prepared / "collection.json").write_text('{"title": "Prepared Elsewhere"}')
+    fake_bin = tmp_path / "docker-bin"
+    fake_bin.mkdir()
+    log = tmp_path / "docker.log"
+    (fake_bin / "docker").write_text(LOGGING_DOCKER.format(log=log))
+    (fake_bin / "docker").chmod(0o755)
+    (fake_bin / "systemctl").write_text(LOGGING_DOCKER.format(log=log))
+    (fake_bin / "systemctl").chmod(0o755)
+    env = {**os.environ, "PATH": f"{fake_bin}:{os.environ['PATH']}"}
+
+    def run(*flags, name="demo", action="import"):
+        command = ["bash", str(ROOT / "deploy/bootstrap.sh"), action]
+        command += ["--name", name, "--data-root", str(data_root), *flags]
+        return subprocess.run(command, capture_output=True, text=True, env=env)
+
+    return run, current, prepared, runner, log
+
+
+def test_bootstrap_import_swaps_in_the_prepared_collection_and_keeps_the_old_one(
+    import_site,
+):
+    run, current, prepared, runner, log = import_site
+    result = run("--from", str(prepared), "--image", "example/image:2")
+    assert result.returncode == 0, result.stderr
+    assert (
+        json.loads((current / "collection.json").read_text())["title"]
+        == "Prepared Elsewhere"
+    )
+    assert (current / "embeddings" / "index_info.json").exists()
+    assert (current / "ingest_complete").exists(), "the machine must not index again"
+    assert (current / "prepared_from").read_text().strip() == str(prepared)
+    assert json.loads((current / "settings.json").read_text()) == {"max_upload_mb": 20}
+    kept = [p for p in current.parent.iterdir() if p.name.startswith(".demo.previous-")]
+    assert len(kept) == 1 and (kept[0] / "embeddings" / "embeddings.pt").exists()
+    assert '"example/image:2"' in runner.read_text()
+    assert "pull example/image:2" in log.read_text()
+
+
+def test_bootstrap_import_keeps_downloaded_models_between_restarts(import_site):
+    run, current, prepared, runner, _ = import_site
+    runner.write_text(f'docker run --rm -v "{current}:/data" "example/image:1" serve\n')
+    assert run("--from", str(prepared)).returncode == 0
+    mount = f'-v "{current}:/data" -v dce-models:/app/.cache/huggingface "example'
+    assert mount in runner.read_text()
+    assert run("--from", str(prepared)).returncode == 0
+    assert runner.read_text().count("dce-models") == 1
+
+
+def test_bootstrap_import_refuses_a_folder_that_is_not_a_prepared_collection(
+    import_site,
+):
+    run, current, prepared, runner, _ = import_site
+    (prepared / "embeddings" / "metadata.sqlite").unlink()
+    result = run("--from", str(prepared))
+    assert result.returncode != 0
+    assert "not a prepared collection" in result.stderr
+    assert (current / "embeddings" / "embeddings.pt").read_text() == "old index"
+    assert [p.name for p in current.parent.iterdir()] == ["demo"]
+    assert '"example/image:1"' in runner.read_text()
+
+
+def test_bootstrap_import_needs_a_site_to_import_into(import_site):
+    run, _, prepared, _, _ = import_site
+    result = run("--from", str(prepared), name="other")
+    assert result.returncode != 0
+    assert "no collection named other" in result.stderr
+
+
+def test_bootstrap_status_names_where_a_prepared_collection_came_from(import_site):
+    run, _, prepared, _, log = import_site
+    assert run("--from", str(prepared)).returncode == 0
+    status = run(action="status")
+    assert status.returncode == 0, status.stderr
+    assert f"copied from {prepared}" in status.stdout
+    assert "ingest" not in log.read_text(), "nothing was indexed to report on"
+    report = run("--json", action="status")
+    assert json.loads(report.stdout) == {"prepared_from": str(prepared)}
+
+
+def test_bootstrap_install_never_copies_a_prepared_collection_over_a_site(import_site):
+    run, current, prepared, _, _ = import_site
+    result = run("--from", str(prepared), action="install")
+    assert result.returncode != 0
+    assert "use import" in result.stderr
+    assert (current / "embeddings" / "embeddings.pt").read_text() == "old index"
+
+
+def test_bootstrap_install_takes_images_or_a_prepared_collection_not_both(import_site):
+    run, _, prepared, _, _ = import_site
+    result = run(
+        "--source", "/images", "--from", str(prepared), action="install", name="new"
+    )
+    assert result.returncode != 0
+    assert "not both" in result.stderr
+
+
+def template_resources():
+    import yaml
+
+    class Template(yaml.SafeLoader):
+        pass
+
+    def intrinsic(loader, suffix, node):
+        if isinstance(node, yaml.ScalarNode):
+            value = loader.construct_scalar(node)
+        elif isinstance(node, yaml.SequenceNode):
+            value = loader.construct_sequence(node, deep=True)
+        else:
+            value = loader.construct_mapping(node, deep=True)
+        return {suffix: value}
+
+    Template.add_multi_constructor("!", intrinsic)
+    text = (ROOT / "deploy/aws/template.yaml").read_text()
+    return yaml.load(text, Loader=Template)["Resources"]
+
+
+def test_cloudfront_caches_images_and_assets_under_the_base_path_too():
+    distribution = template_resources()["Distribution"]["Properties"]
+    behaviors = distribution["DistributionConfig"]["CacheBehaviors"]
+    assert [b["PathPattern"] for b in behaviors] == [
+        {"If": ["HasBasePath", {"Sub": "${BasePath}/images/*"}, "/images/*"]},
+        {"If": ["HasBasePath", {"Sub": "${BasePath}/assets/*"}, "/assets/*"]},
+    ]
+
+
+def test_a_failure_that_would_repeat_does_not_restart_the_site_forever():
+    script = (ROOT / "deploy/bootstrap.sh").read_text()
+    unit = script[script.index("[Service]") : script.index("[Install]")]
+    assert "Restart=always" in unit
+    assert "RestartPreventExitStatus=2 3" in unit
+
+
+def test_indexing_a_source_with_no_images_fails_for_good(tmp_path):
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "src.ingest",
+            str(empty),
+            "--data-dir",
+            str(tmp_path / "c"),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "No images found" in result.stdout

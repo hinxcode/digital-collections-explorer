@@ -5,6 +5,7 @@ Provides a common interface for different embedding models (CLIP, SigLIP, etc.)
 
 import logging
 from abc import ABC, abstractmethod
+from typing import Optional
 
 import torch
 
@@ -14,15 +15,17 @@ logger = logging.getLogger(__name__)
 class BaseEmbeddingService(ABC):
     """Abstract base class for embedding services"""
 
-    def __init__(self, model_name: str, device: str):
+    def __init__(self, model_name: str, device: str, revision: Optional[str] = None):
         """
         Initialize the embedding service
 
         Args:
             model_name: HuggingFace model identifier
             device: Device to run the model on ("cuda", "mps", or "cpu")
+            revision: Commit of the model to load; the latest one when None
         """
         self.model_name = model_name
+        self.revision = revision
         self.device = self._determine_device(device)
         self.model = None
         self.processor = None

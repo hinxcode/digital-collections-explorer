@@ -1,157 +1,327 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import SearchBar from './components/SearchBar';
-import { ResultsPerPageDropdown } from './components/Pagination';
 import SearchResults from './components/SearchResults';
-import { searchByText, searchByImage, getEmbeddingStats } from './services/api';
+import ExampleQueries from './components/ExampleQueries';
+import GroupFilter from './components/GroupFilter';
+import ImageGrid from './components/ImageGrid';
+import ItemDetail from './components/ItemDetail';
+import ModeToggle from './components/ModeToggle';
+import SearchNotice from './components/SearchNotice';
+import SiteFooter from './components/SiteFooter';
+import UncatalogedToggle from './components/UncatalogedToggle';
+import {
+  homeHref, imageSearchHref, searchHref, useHashRoute,
+} from './hooks/useHashRoute';
+import { getCollection, getSample, searchByImage, searchByText } from './services/api';
 import './App.css';
 
+const WALL_SIZE = 60;
+const RESULTS_PER_PAGE = 48;
+
 function App() {
-  const [photos, setPhotos] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [route, navigate, canGoBack] = useHashRoute();
+  const [collection, setCollection] = useState(null);
+  const [wall, setWall] = useState([]);
+  const [wallHasMore, setWallHasMore] = useState(false);
+  const [wallIsLoading, setWallIsLoading] = useState(false);
+  const [wallFailed, setWallFailed] = useState(false);
+  const wallSeed = useRef(Math.floor(Math.random() * 1e9));
+  const [results, setResults] = useState([]);
+  const [searchInfo, setSearchInfo] = useState(null);
+  const [hasMore, setHasMore] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const searchInputRef = useRef(null);
-  const [searchMode, setSearchMode] = useState('text'); // 'text' or 'image'
+  const [searchQuery, setSearchQuery] = useState('');
   const [uploadedImage, setUploadedImage] = useState(null);
-  const [hasMore, setHasMore] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [resultsPerPage, setResultsPerPage] = useState(50);
-  const [embeddingCount, setEmbeddingCount] = useState(null);
+  const searchInputRef = useRef(null);
+  const groupsKey = (route.groups || []).join(',');
+  const selectedGroups = useMemo(() => groupsKey.split(',').filter(Boolean), [groupsKey]);
+  const includeUncataloged = route.uncataloged !== false;
+  const wallKey = `${groupsKey}|${includeUncataloged}`;
+  const wallGroups = useRef(wallKey);
+  const groupLabels = useMemo(
+    () => Object.fromEntries((collection?.groups || []).map((group) => [group.id, group.label])),
+    [collection],
+  );
 
   useEffect(() => {
-    const fetchEmbeddingStats = async () => {
-      try {
-        const stats = await getEmbeddingStats();
-        setEmbeddingCount(stats.count);
-      } catch (error) {
-        console.error('Failed to load embedding stats:', error);
-      }
+    getCollection()
+      .then(setCollection)
+      .catch((loadError) => console.error('Failed to load the collection:', loadError));
+  }, []);
+
+  useEffect(() => {
+    if (collection?.title) {
+      document.title = collection.title;
+    }
+  }, [collection]);
+
+  const extendWall = useCallback(() => {
+    setWallIsLoading(true);
+    setWallFailed(false);
+    getSample(WALL_SIZE, wallSeed.current, wall.length, selectedGroups, includeUncataloged)
+      .then(({ results: more, has_more: hasMoreImages }) => {
+        if (wallGroups.current === wallKey) {
+          setWall((shown) => [...shown, ...more]);
+          setWallHasMore(hasMoreImages);
+        }
+      })
+      .catch((loadError) => {
+        console.error('Failed to load images:', loadError);
+        setWallFailed(true);
+      })
+      .finally(() => setWallIsLoading(false));
+  }, [wall.length, wallKey, selectedGroups, includeUncataloged]);
+
+  useEffect(() => {
+    if (route.name === 'home' && wallGroups.current !== wallKey) {
+      wallGroups.current = wallKey;
+      setWall([]);
+      setWallHasMore(false);
+      setWallFailed(false);
+    }
+  }, [route.name, wallKey]);
+
+  useEffect(() => {
+    if (route.name === 'home' && wall.length === 0 && !wallIsLoading && !wallFailed) {
+      extendWall();
+    }
+  }, [route.name, wall.length, wallIsLoading, wallFailed, extendWall]);
+
+  useEffect(() => {
+    const isTextSearch = route.name === 'search';
+    const isImageSearch = route.name === 'image-search' && uploadedImage;
+    if (!isTextSearch && !isImageSearch) {
+      return undefined;
+    }
+
+    let isCurrent = true;
+    setIsLoading(true);
+    setError(null);
+    if (isTextSearch) {
+      setSearchQuery(route.query);
+    }
+
+    const request = isTextSearch
+      ? searchByText(route.query, RESULTS_PER_PAGE, route.page, selectedGroups, {
+        mode: route.mode,
+        exact: route.exact,
+        uncataloged: includeUncataloged,
+      })
+      : searchByImage(
+        uploadedImage,
+        RESULTS_PER_PAGE,
+        route.page,
+        selectedGroups,
+        includeUncataloged,
+      );
+
+    request
+      .then(({ results: found, search }) => {
+        if (isCurrent) {
+          setResults(found);
+          setSearchInfo(search);
+          setHasMore(found.length >= RESULTS_PER_PAGE);
+        }
+      })
+      .catch((searchError) => {
+        if (isCurrent) {
+          setError(searchError.visitorMessage || 'The search failed. Please try again.');
+        }
+      })
+      .finally(() => isCurrent && setIsLoading(false));
+
+    return () => {
+      isCurrent = false;
     };
-
-    fetchEmbeddingStats();
-  }, []);
-
-  const formatPhotosForGallery = (results) => {
-    return results.map(result => ({
-      src: `/images/${result.id}?size=full`,
-      thumbnail: `/images/${result.id}?size=thumbnail`,
-      thumbnailWidth: 320, // Default width if not available
-      thumbnailHeight: 212, // Default height with 3:2 aspect ratio
-      width: 800, // Default width for lightbox
-      height: 600, // Default height for lightbox
-      alt: result.metadata.file_name || '',
-      originalData: result,
-      customOverlay: (
-        <div className="custom-overlay">
-          <div className="custom-overlay-title">
-            {result.metadata.file_name || result.file_name || 'Untitled'}
-          </div>
-        </div>
-      )
-    }));
-  };
-
-  const handleSearchByText = useCallback(async (query) => {
-    if (!query.trim()) {
-      setError('Please enter a search term');
-      return;
-    }
-    
-    setIsLoading(true);
-    setError(null);
-    setSearchMode('text');
-    setSearchQuery(query);
-    
-    try {
-      const results = await searchByText(query, resultsPerPage, currentPage);
-      setPhotos(formatPhotosForGallery(results));
-      setHasMore(results.length >= resultsPerPage);
-    } catch (error) {
-      console.error('Error performing search:', error);
-      setError('Text search failed. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [resultsPerPage, currentPage]);
-
-  const handleSearchByImage = useCallback(async (image) => {
-    setIsLoading(true);
-    setError(null);
-    setSearchMode('image');
-    
-    try {
-      const results = await searchByImage(image, resultsPerPage, currentPage);
-      setPhotos(formatPhotosForGallery(results));
-      setHasMore(results.length >= resultsPerPage);
-    } catch (error) {
-      console.error('Error performing image search:', error);
-      setError('Image search failed. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [resultsPerPage, currentPage]);
+  }, [
+    route.name, route.query, route.page, route.mode, route.exact, uploadedImage, selectedGroups,
+    includeUncataloged,
+  ]);
 
   useEffect(() => {
-    if (searchMode === 'text' && searchQuery.trim()) {
-      handleSearchByText(searchQuery);
-    } else if (searchMode === 'image' && uploadedImage) {
-      handleSearchByImage(uploadedImage);
+    if (route.name === 'home') {
+      setSearchQuery('');
     }
-  }, [currentPage, resultsPerPage, searchMode, searchQuery, uploadedImage, handleSearchByText, handleSearchByImage]);
+  }, [route.name]);
 
-  const handleSearchModeChanged = useCallback((mode) => {
-    setSearchMode(mode);
-    setCurrentPage(1);
-    setPhotos([]);
-    setHasMore(false);
-  }, []);
+  useEffect(() => {
+    if (route.name === 'image-search' && !uploadedImage) {
+      navigate(homeHref(selectedGroups, includeUncataloged));
+    }
+  }, [route.name, uploadedImage, navigate, selectedGroups, includeUncataloged]);
+
+  const handleSearchByText = useCallback((query) => {
+    if (query.trim()) {
+      navigate(searchHref(query.trim(), 1, selectedGroups, { uncataloged: includeUncataloged }));
+    }
+  }, [navigate, selectedGroups, includeUncataloged]);
+
+  const handleSearchByImage = useCallback((image) => {
+    setUploadedImage(image);
+    setSearchQuery('');
+    navigate(imageSearchHref(1, selectedGroups, includeUncataloged));
+  }, [navigate, selectedGroups, includeUncataloged]);
+
+  const handleImageCleared = useCallback(() => {
+    setUploadedImage(null);
+    navigate(homeHref(selectedGroups, includeUncataloged));
+  }, [navigate, selectedGroups, includeUncataloged]);
+
+  const handlePageChanged = useCallback((change) => {
+    const page = typeof change === 'function' ? change(route.page) : change;
+    navigate(route.name === 'search'
+      ? searchHref(route.query, page, selectedGroups, {
+        mode: route.mode, exact: route.exact, uncataloged: includeUncataloged,
+      })
+      : imageSearchHref(page, selectedGroups, includeUncataloged));
+  }, [
+    navigate, route.name, route.query, route.page, route.mode, route.exact, selectedGroups,
+    includeUncataloged,
+  ]);
+
+  const handleFilterChanged = useCallback((groups, uncataloged) => {
+    if (route.name === 'search') {
+      navigate(searchHref(route.query, 1, groups, {
+        mode: route.mode, exact: route.exact, uncataloged,
+      }));
+    } else if (route.name === 'image-search') {
+      navigate(imageSearchHref(1, groups, uncataloged));
+    } else {
+      navigate(homeHref(groups, uncataloged));
+    }
+  }, [navigate, route.name, route.query, route.mode, route.exact]);
+
+  const handleGroupsChanged = useCallback((groups) => (
+    handleFilterChanged(groups, includeUncataloged)
+  ), [handleFilterChanged, includeUncataloged]);
+
+  const handleUncatalogedChanged = useCallback((uncataloged) => (
+    handleFilterChanged(selectedGroups, uncataloged)
+  ), [handleFilterChanged, selectedGroups]);
+
+  const handleModeChanged = useCallback((mode) => {
+    navigate(searchHref(route.query, 1, selectedGroups, {
+      mode, exact: route.exact, uncataloged: includeUncataloged,
+    }));
+  }, [navigate, route.query, route.exact, selectedGroups, includeUncataloged]);
+
+  const isSearching = route.name === 'search' || route.name === 'image-search';
+  const title = collection?.title || 'Digital Collection Explorer';
 
   return (
     <div className="App">
-      <header className="App-header">
-        <h1>Digital Collection Explorer</h1>
-        <p>Explore historical photographs using natural language search</p>
+      <header className={`App-header ${route.name === 'home' ? '' : 'App-header-compact'}`}>
+        <h1><a href="#/">{title}</a></h1>
+        {route.name === 'home' && collection && (
+          <>
+            {collection.description && <p>{collection.description}</p>}
+            <p className="App-header-counts">
+              {collection.objects.toLocaleString()} objects · {collection.images.toLocaleString()} images
+              {collection.source_name ? ` · from ${collection.source_name}` : ''}
+            </p>
+          </>
+        )}
       </header>
-      
+
       <main className="App-main">
-        <div className="search-controls">
-          <SearchBar
-            inputRef={searchInputRef}
-            searchMode={searchMode}
-            setSearchMode={handleSearchModeChanged}
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            uploadedImage={uploadedImage}
-            setUploadedImage={setUploadedImage}
-            onSearchByText={handleSearchByText}
-            onSearchByImage={handleSearchByImage}
-          />
-        </div>
-        <ResultsPerPageDropdown
-          resultsPerPage={resultsPerPage}
-          setResultsPerPage={setResultsPerPage}
-          setCurrentPage={setCurrentPage}
-          isLoading={isLoading}
-        />
-        <SearchResults
-          photos={photos}
-          isLoading={isLoading}
-          error={error}
-          currentPage={currentPage}
-          setCurrentPage={setCurrentPage}
-          hasMore={hasMore}
-        />
-        {
-          photos.length === 0 && embeddingCount !== null && (
-            <div className="welcome-message">
-              <p>
-                Enter a search term or upload a similar image to discover matches
-                from our collection of {embeddingCount.toLocaleString()} photographs.
-              </p>
+        {route.name !== 'item' && (
+          <div className="search-controls">
+            <div className="search-column">
+              <SearchBar
+                inputRef={searchInputRef}
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                uploadedImage={route.name === 'image-search' ? uploadedImage : null}
+                onSearchByText={handleSearchByText}
+                onSearchByImage={handleSearchByImage}
+                onClearImage={handleImageCleared}
+              />
+              <div className="search-options">
+                <GroupFilter
+                  groups={collection?.groups}
+                  label={collection?.group_label}
+                  selected={selectedGroups}
+                  onChange={handleGroupsChanged}
+                  counts={route.name === 'search' && route.mode === 'keyword'
+                    ? searchInfo?.keyword?.groups
+                    : undefined}
+                />
+                <UncatalogedToggle
+                  collection={collection}
+                  catalogedOnly={!includeUncataloged}
+                  onChange={(catalogedOnly) => handleUncatalogedChanged(!catalogedOnly)}
+                />
+                {route.name === 'search' && collection?.catalog_search && (
+                  <ModeToggle
+                    mode={route.mode}
+                    onChange={handleModeChanged}
+                  />
+                )}
+              </div>
             </div>
-          )
-        }
+          </div>
+        )}
+
+        {route.name === 'home' && (
+          <>
+            <ExampleQueries
+              queries={collection?.example_queries}
+              groups={selectedGroups}
+              uncataloged={includeUncataloged}
+            />
+            <section className="wall">
+              <div className="wall-heading">
+                <h2>Browse the collection</h2>
+              </div>
+              <ImageGrid items={wall} groupLabels={groupLabels} />
+              {wallFailed && (
+                <div className="wall-more">
+                  <p>The images could not be loaded.</p>
+                  <button type="button" onClick={extendWall} disabled={wallIsLoading}>
+                    Try again
+                  </button>
+                </div>
+              )}
+              {wallHasMore && !wallFailed && (
+                <div className="wall-more">
+                  <button type="button" onClick={extendWall} disabled={wallIsLoading}>
+                    {wallIsLoading ? 'Loading…' : 'Show me more'}
+                  </button>
+                </div>
+              )}
+            </section>
+          </>
+        )}
+
+        {isSearching && (
+          <SearchResults
+            items={results}
+            isLoading={isLoading}
+            error={error}
+            currentPage={route.page}
+            setCurrentPage={handlePageChanged}
+            hasMore={hasMore}
+            heading={route.name === 'search' ? `Results for “${route.query}”` : 'Images like the one you uploaded'}
+            groupLabels={groupLabels}
+            notice={route.name === 'search' && searchInfo && !isLoading ? (
+              <SearchNotice
+                search={searchInfo}
+                query={route.query}
+                groups={selectedGroups}
+                mode={route.mode}
+                uncataloged={includeUncataloged}
+              />
+            ) : null}
+          />
+        )}
+
+        {route.name === 'item' && (
+          <ItemDetail id={route.id} collection={collection} canGoBack={canGoBack} />
+        )}
       </main>
+
+      <SiteFooter collection={collection} />
     </div>
   );
 }

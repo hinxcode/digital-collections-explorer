@@ -128,8 +128,8 @@ class TestLoadEmbeddings:
         """Test loading embeddings when metadata file is missing"""
         mock_torch_load.side_effect = [mock_embeddings, mock_item_ids]
 
-        # Return True for .pt files (embeddings and item_ids), False for metadata.json
-        mock_exists.side_effect = [True, True, False]
+        # No index_info.json; True for the .pt files, False for metadata.json
+        mock_exists.side_effect = [False, True, True, False]
 
         embedding_service.load_embeddings()
 

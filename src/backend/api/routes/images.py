@@ -1,11 +1,25 @@
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 
+from src.backend.core.config import settings
+from src.backend.services.collection_store import METADATA_DB, related_thumbnail
 from src.backend.services.embedding_service import embedding_service
 
 router = APIRouter(tags=["images"])
+
+# One day, in seconds.
+IMAGE_CACHE_SECONDS = 86_400
+CACHE_HEADERS = {"Cache-Control": f"public, max-age={IMAGE_CACHE_SECONDS}"}
+
+
+def resolve_path(path_str: str) -> Path:
+    """Resolve a stored path, which may be relative to the collection's data folder"""
+    path = Path(path_str)
+    if path.is_absolute() or path.exists() or not settings.data_dir:
+        return path
+    return Path(settings.data_dir) / path
 
 
 @router.get("/images/{id}")
@@ -42,12 +56,34 @@ async def get_image_by_id(
             status_code=404, detail="Image path not found in document metadata"
         )
 
-    path = Path(path_str)
+    path = resolve_path(path_str)
 
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"Image not found at path: {path}")
 
-    return FileResponse(path)
+    return FileResponse(path, headers=CACHE_HEADERS)
+
+
+@router.get("/images/related/{source_id}")
+async def get_related_image(source_id: str):
+    """
+    Serve the thumbnail of a photo from another source that shows a record
+
+    Args:
+        source_id: The id of the photo in that source, such as flickr:2535935153
+    """
+    metadata_db = Path(embedding_service.embeddings_dir) / METADATA_DB
+    path_str = related_thumbnail(metadata_db, source_id)
+
+    if not path_str:
+        raise HTTPException(status_code=404, detail=f"No image kept for {source_id}")
+
+    path = resolve_path(path_str)
+
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"Image not found at path: {path}")
+
+    return FileResponse(path, headers=CACHE_HEADERS)
 
 
 @router.get("/static/{id}")
@@ -74,7 +110,13 @@ async def get_original_document(id: str):
             status_code=404, detail="Original file path not found in document metadata"
         )
 
-    path = Path(path_str)
+    if path_str.startswith(("http://", "https://")):
+        return RedirectResponse(path_str)
+
+    path = resolve_path(path_str)
+
+    if not path.exists() and "processed" in doc["metadata"]["paths"]:
+        path = resolve_path(doc["metadata"]["paths"]["processed"])
 
     if not path.exists():
         raise HTTPException(

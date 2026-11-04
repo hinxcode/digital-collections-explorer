@@ -1,0 +1,357 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Digital Collections Explorer on one EC2 instance. The instance indexes the
+  collection once, or copies one prepared elsewhere, then serves the search site.
+  Deleting the stack removes everything it created, including the index.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: {default: Your collection}
+        Parameters: [CollectionName, Source, PreparedFrom, FetchVia, AnonymousS3, SourceBucket, Limit]
+      - Label: {default: Machine}
+        Parameters: [InstanceType, DiskSizeGiB, AllowedCidr, PublicHttps, Domain, CertificateArn]
+      - Label: {default: Spending alert}
+        Parameters: [MonthlyBudgetUsd, BudgetEmail]
+      - Label: {default: Advanced}
+        Parameters: [BasePath, Image, BootstrapUrl, MachineImageId, CloudFrontPrefixList]
+
+Parameters:
+  CollectionName:
+    Type: String
+    AllowedPattern: "^[a-z0-9][a-z0-9-]*$"
+    ConstraintDescription: lowercase letters, digits and hyphens only
+    Description: Short name for the collection, for example nmah-photographs.
+  Source:
+    Type: String
+    Default: ""
+    Description: Where the images are. An s3://bucket/prefix or the URL of a .parquet manifest.
+  PreparedFrom:
+    Type: String
+    Default: ""
+    Description: >-
+      Instead of Source, an s3://bucket/prefix holding a collection prepared elsewhere.
+      The machine copies it and indexes nothing. Set SourceBucket to that bucket.
+  FetchVia:
+    Type: String
+    Default: ""
+    Description: Only for manifests whose URLs are not downloadable. The s3://bucket that holds the files.
+  AnonymousS3:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: Read S3 without credentials. Use true for public buckets.
+  SourceBucket:
+    Type: String
+    Default: ""
+    Description: Only for a private bucket in this account. Its name, so the machine is allowed to read it.
+  Limit:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    Description: Index only the first N images. 0 means all of them.
+  InstanceType:
+    Type: String
+    Default: t3.medium
+    AllowedValues: [t3.small, t3.medium, t3.large, t3.xlarge, c7i.xlarge, c7i.2xlarge]
+    Description: >-
+      t3.medium is enough to serve searches. Indexing a large collection is faster
+      on a c7i. You can change this later; the index is kept.
+  DiskSizeGiB:
+    Type: Number
+    Default: 30
+    MinValue: 20
+    Description: The report from "python -m src.profiling" says how much disk a collection needs.
+  AllowedCidr:
+    Type: String
+    Default: 0.0.0.0/0
+    AllowedPattern: "^[0-9./]+$"
+    Description: Who may open the site. 0.0.0.0/0 is everyone. Use your office range to keep it internal.
+  PublicHttps:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: >-
+      Open the site to everyone over HTTPS, through CloudFront. The machine then only
+      accepts traffic from CloudFront and AllowedCidr is ignored.
+  Domain:
+    Type: String
+    Default: ""
+    AllowedPattern: "^$|^([a-z0-9]([a-z0-9-]*[a-z0-9])?\\.)+[a-z]{2,}$"
+    Description: >-
+      Only with PublicHttps. A domain of your own for the site, such as
+      collection.example.org. Point it at CloudFrontAddress with a CNAME record.
+  CertificateArn:
+    Type: String
+    Default: ""
+    AllowedPattern: "^$|^arn:aws:acm:us-east-1:[0-9]{12}:certificate/[0-9a-f-]+$"
+    Description: >-
+      Only with Domain. An issued AWS Certificate Manager certificate for the domain,
+      in us-east-1, where CloudFront looks for certificates.
+  MonthlyBudgetUsd:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    Description: Email an alert when this month's AWS bill passes this amount. 0 turns the alert off.
+  BudgetEmail:
+    Type: String
+    Default: ""
+    Description: Where to send the alert.
+  BasePath:
+    Type: String
+    Default: ""
+    AllowedPattern: "^$|^(/[A-Za-z0-9._~-]+)+$"
+    Description: >-
+      Serve the site under this path, such as /explorer, for a website of your own
+      whose proxy forwards that path here. Set only when the machine is created.
+  Image:
+    Type: String
+    Default: ghcr.io/hinxcode/digital-collections-explorer:latest
+  BootstrapUrl:
+    Type: String
+    Default: https://raw.githubusercontent.com/hinxcode/digital-collections-explorer/main/deploy/bootstrap.sh
+  MachineImageId:
+    Type: AWS::EC2::Image::Id
+    Description: Amazon Linux 2023 (x86_64) image for the machine. deploy.sh fills this in.
+  CloudFrontPrefixList:
+    Type: String
+    Default: ""
+    Description: >-
+      Only with PublicHttps. The id of the prefix list
+      com.amazonaws.global.cloudfront.origin-facing in this region. deploy.sh fills this in.
+
+Rules:
+  OneSource:
+    Assertions:
+      - Assert: !Or [!Not [!Equals [!Ref Source, ""]], !Not [!Equals [!Ref PreparedFrom, ""]]]
+        AssertDescription: Set Source, or PreparedFrom for a collection prepared elsewhere.
+      - Assert: !Or [!Equals [!Ref Source, ""], !Equals [!Ref PreparedFrom, ""]]
+        AssertDescription: Set Source or PreparedFrom, not both.
+  DomainThroughCloudFront:
+    Assertions:
+      - Assert: !Or [!Equals [!Ref Domain, ""], !Equals [!Ref PublicHttps, "true"]]
+        AssertDescription: A domain of your own is served through CloudFront, so it needs PublicHttps.
+      - Assert: !Or
+          - !And [!Equals [!Ref Domain, ""], !Equals [!Ref CertificateArn, ""]]
+          - !And [!Not [!Equals [!Ref Domain, ""]], !Not [!Equals [!Ref CertificateArn, ""]]]
+        AssertDescription: Set Domain and CertificateArn together.
+
+Conditions:
+  HasPreparedFrom: !Not [!Equals [!Ref PreparedFrom, ""]]
+  HasFetchVia: !Not [!Equals [!Ref FetchVia, ""]]
+  IsAnonymous: !Equals [!Ref AnonymousS3, "true"]
+  HasLimit: !Not [!Equals [!Ref Limit, 0]]
+  HasSourceBucket: !Not [!Equals [!Ref SourceBucket, ""]]
+  UsesHttps: !Equals [!Ref PublicHttps, "true"]
+  HasDomain: !Not [!Equals [!Ref Domain, ""]]
+  HasBasePath: !Not [!Equals [!Ref BasePath, ""]]
+  IsUsEast1: !Equals [!Ref "AWS::Region", us-east-1]
+  HasBudget: !And
+    - !Not [!Equals [!Ref MonthlyBudgetUsd, 0]]
+    - !Not [!Equals [!Ref BudgetEmail, ""]]
+
+Resources:
+  SiteSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub "Web access to the ${CollectionName} collection"
+      SecurityGroupIngress:
+        - !If
+          - UsesHttps
+          - IpProtocol: tcp
+            FromPort: 80
+            ToPort: 80
+            SourcePrefixListId: !Ref CloudFrontPrefixList
+          - IpProtocol: tcp
+            FromPort: 80
+            ToPort: 80
+            CidrIp: !Ref AllowedCidr
+      Tags:
+        - {Key: dce-collection, Value: !Ref CollectionName}
+
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: {Service: ec2.amazonaws.com}
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
+      Policies:
+        - !If
+          - HasSourceBucket
+          - PolicyName: read-source-bucket
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action: [s3:GetObject, s3:ListBucket]
+                  Resource:
+                    - !Sub "arn:${AWS::Partition}:s3:::${SourceBucket}"
+                    - !Sub "arn:${AWS::Partition}:s3:::${SourceBucket}/*"
+          - !Ref AWS::NoValue
+      Tags:
+        - {Key: dce-collection, Value: !Ref CollectionName}
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref InstanceRole]
+
+  Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref MachineImageId
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref InstanceProfile
+      SecurityGroupIds: [!GetAtt SiteSecurityGroup.GroupId]
+      # 2 hops: the container sits one hop behind the instance and needs its role.
+      MetadataOptions:
+        HttpTokens: required
+        HttpPutResponseHopLimit: 2
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: !Ref DiskSizeGiB
+            VolumeType: gp3
+            Encrypted: true
+            DeleteOnTermination: true
+      UserData:
+        Fn::Base64: !Join
+          - ""
+          - - "#!/bin/bash\n"
+            - "set -euxo pipefail\n"
+            - !Sub "curl -fsSL '${BootstrapUrl}' -o /usr/local/bin/dce-bootstrap\n"
+            - "chmod +x /usr/local/bin/dce-bootstrap\n"
+            - !If
+              - HasPreparedFrom
+              - !Join
+                - ""
+                - - !Sub "/usr/local/bin/dce-bootstrap install --name '${CollectionName}' --from '${PreparedFrom}' --port 80 --image '${Image}'"
+                  - !If [HasBasePath, !Sub " --base-path '${BasePath}'", ""]
+              - !Join
+                - ""
+                - - !Sub "/usr/local/bin/dce-bootstrap install --name '${CollectionName}' --source '${Source}' --port 80 --image '${Image}'"
+                  - !If [HasFetchVia, !Sub " --fetch-via '${FetchVia}'", ""]
+                  - !If [IsAnonymous, " --anonymous", ""]
+                  - !If [HasLimit, !Sub " --limit ${Limit}", ""]
+                  - !If [HasBasePath, !Sub " --base-path '${BasePath}'", ""]
+            - "\n"
+      Tags:
+        - {Key: Name, Value: !Sub "dce-${CollectionName}"}
+        - {Key: dce-collection, Value: !Ref CollectionName}
+
+  SiteAddress:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref Instance
+      Tags:
+        - {Key: dce-collection, Value: !Ref CollectionName}
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Condition: UsesHttps
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks: [W1030]
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub "Digital Collections Explorer (${CollectionName})"
+        HttpVersion: http2and3
+        PriceClass: PriceClass_100
+        Aliases: !If [HasDomain, [!Ref Domain], !Ref "AWS::NoValue"]
+        ViewerCertificate: !If
+          - HasDomain
+          - AcmCertificateArn: !Ref CertificateArn
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - !Ref "AWS::NoValue"
+        Origins:
+          - Id: site
+            DomainName: !Sub
+              - "ec2-${DashedAddress}.${Suffix}"
+              - DashedAddress: !Join ["-", !Split [".", !GetAtt SiteAddress.PublicIp]]
+                Suffix: !If
+                  - IsUsEast1
+                  - compute-1.amazonaws.com
+                  - !Sub "${AWS::Region}.compute.amazonaws.com"
+            CustomOriginConfig:
+              OriginProtocolPolicy: http-only
+              HTTPPort: 80
+              OriginReadTimeout: 60
+        CustomErrorResponses:
+          - {ErrorCode: 400, ErrorCachingMinTTL: 0}
+          - {ErrorCode: 500, ErrorCachingMinTTL: 0}
+          - {ErrorCode: 502, ErrorCachingMinTTL: 0}
+          - {ErrorCode: 503, ErrorCachingMinTTL: 0}
+          - {ErrorCode: 504, ErrorCachingMinTTL: 0}
+        DefaultCacheBehavior:
+          TargetOriginId: site
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS, PUT, PATCH, POST, DELETE]
+          Compress: true
+          # Managed policies CachingDisabled and AllViewerExceptHostHeader.
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+          OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+        CacheBehaviors:
+          - PathPattern: !If [HasBasePath, !Sub "${BasePath}/images/*", /images/*]
+            TargetOriginId: site
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD]
+            # Managed policy UseOriginCacheControlHeaders-QueryStrings.
+            CachePolicyId: 4cc15a8a-d715-48a4-82b8-cc0b614638fe
+          - PathPattern: !If [HasBasePath, !Sub "${BasePath}/assets/*", /assets/*]
+            TargetOriginId: site
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD]
+            Compress: true
+            # Managed policy CachingOptimized.
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+      Tags:
+        - {Key: dce-collection, Value: !Ref CollectionName}
+
+  SpendingAlert:
+    Type: AWS::Budgets::Budget
+    Condition: HasBudget
+    Properties:
+      Budget:
+        BudgetName: !Sub "dce-${CollectionName}-monthly"
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref MonthlyBudgetUsd
+          Unit: USD
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref BudgetEmail
+
+Outputs:
+  SiteUrl:
+    Description: Opens once indexing, or the copy of a prepared collection, has finished.
+    Value: !If
+      - HasDomain
+      - !Sub "https://${Domain}${BasePath}"
+      - !If
+        - UsesHttps
+        - !Sub "https://${Distribution.DomainName}${BasePath}"
+        - !Sub "http://${SiteAddress.PublicIp}${BasePath}"
+  CloudFrontAddress:
+    Condition: UsesHttps
+    Description: The site's CloudFront address. A domain of your own points here with a CNAME record.
+    Value: !GetAtt Distribution.DomainName
+  InstanceId:
+    Value: !Ref Instance
+  Connect:
+    Description: Open a shell on the machine without SSH.
+    Value: !Sub "aws ssm start-session --target ${Instance} --region ${AWS::Region}"

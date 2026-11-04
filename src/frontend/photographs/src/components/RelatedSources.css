@@ -1,0 +1,34 @@
+.related-source {
+  margin-top: 1.25rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: #b0b0b0;
+}
+
+.related-source p {
+  margin: 0 0 0.2rem;
+  color: #9a9a9a;
+}
+
+.related-source ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.related-source li + li {
+  margin-top: 0.2rem;
+}
+
+.related-source a {
+  color: #d0b49f;
+}
+
+.related-source-count {
+  white-space: nowrap;
+}
+
+.related-source-count::before {
+  content: '·';
+  margin: 0 0.45rem;
+}

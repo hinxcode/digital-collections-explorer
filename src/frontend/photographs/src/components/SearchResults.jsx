@@ -1,42 +1,19 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { Gallery } from 'react-grid-gallery';
-import Lightbox from 'yet-another-react-lightbox';
-import Captions from 'yet-another-react-lightbox/plugins/captions';
-import Thumbnails from 'yet-another-react-lightbox/plugins/thumbnails';
-import Zoom from 'yet-another-react-lightbox/plugins/zoom';
-import 'yet-another-react-lightbox/styles.css';
-import 'yet-another-react-lightbox/plugins/captions.css';
-import 'yet-another-react-lightbox/plugins/thumbnails.css';
+import React from 'react';
+import ImageGrid from './ImageGrid';
 import Pagination from './Pagination';
 import './SearchResults.css';
 
-const SearchResults = React.memo(({ 
-  photos,
+const SearchResults = React.memo(({
+  items,
   isLoading,
   error,
   currentPage,
   setCurrentPage,
   hasMore,
+  heading,
+  groupLabels,
+  notice,
 }) => {
-  const [currentLightboxImageIndex, setCurrentLightboxImageIndex] = useState(0);
-  const [lightboxIsOpen, setLightboxIsOpen] = useState(false);
-
-  const lightboxSlides = useMemo(() => photos.map(photo => ({
-    src: photo.src,
-    alt: photo.alt,
-    title: photo?.originalData?.metadata?.title || photo?.originalData?.metadata?.file_name || 'Untitled',
-    description: photo?.originalData?.metadata?.description || photo?.originalData?.metadata?.paths?.original,
-  })), [photos]);
-
-  const handleLightboxOpened = useCallback((index) => {
-    setCurrentLightboxImageIndex(index);
-    setLightboxIsOpen(true);
-  }, []);
-
-  const handleLightboxClosed = useCallback(() => {
-    setLightboxIsOpen(false);
-  }, []);
-
   if (isLoading) {
     return (
       <div className="loading-indicator">
@@ -53,34 +30,28 @@ const SearchResults = React.memo(({
     );
   }
 
+  if (items.length === 0) {
+    return (
+      <div className="gallery-container">
+        {notice}
+        <div className="no-results">
+          <p>Nothing matched. Try describing what the picture looks like.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="gallery-container">
-      {
-        photos.length > 0 && (
-          <>
-            <Gallery
-              images={photos}
-              enableImageSelection={false}
-              onClick={handleLightboxOpened}
-              margin={2}
-              rowHeight={180}
-            />
-            <Lightbox
-              slides={lightboxSlides}
-              open={lightboxIsOpen}
-              index={currentLightboxImageIndex}
-              close={handleLightboxClosed}
-              plugins={[Captions, Thumbnails, Zoom]}
-            />
-            <Pagination
-              currentPage={currentPage}
-              setCurrentPage={setCurrentPage}
-              hasMore={hasMore}
-              isLoading={isLoading}
-            />
-          </>
-        )
-      }
+      <h2 className="visually-hidden">{heading}</h2>
+      {notice}
+      <ImageGrid items={items} groupLabels={groupLabels} />
+      <Pagination
+        currentPage={currentPage}
+        setCurrentPage={setCurrentPage}
+        hasMore={hasMore}
+        isLoading={isLoading}
+      />
     </div>
   );
 });

@@ -1,4 +1,5 @@
 import json
+import os
 from enum import Enum
 from pathlib import Path
 
@@ -8,12 +9,32 @@ from pydantic_settings import BaseSettings
 class ModelType(str, Enum):
     CLIP = "clip"
     SIGLIP = "siglip"
+    SIGLIP2 = "siglip2"
 
 
 class DeviceType(str, Enum):
     CUDA = "cuda"
     MPS = "mps"
     CPU = "cpu"
+
+
+DEFAULT_MODEL_TYPE = "siglip"
+
+
+def model_type_of(model_name: str | None) -> str:
+    """The model type a model's name points to, or the default type"""
+    name = (model_name or "").lower()
+    for model_type in ("siglip2", "siglip", "clip"):
+        if model_type in name:
+            return model_type
+    return DEFAULT_MODEL_TYPE
+
+
+DEFAULT_MODEL_NAMES = {
+    "clip": "openai/clip-vit-base-patch32",
+    "siglip": "google/siglip-base-patch16-224",
+    "siglip2": "google/siglip2-base-patch16-224",
+}
 
 
 class Settings(BaseSettings):
@@ -28,8 +49,9 @@ class Settings(BaseSettings):
     debug: bool = True
 
     # Embedding model default settings
-    model_type: ModelType = ModelType.CLIP
-    model_name: str = "openai/clip-vit-base-patch32"
+    model_type: ModelType = ModelType.SIGLIP
+    model_name: str = "google/siglip-base-patch16-224"
+    model_revision: str | None = None
     device: DeviceType = DeviceType.CUDA
     batch_size: int = 32
 
@@ -46,10 +68,24 @@ class Settings(BaseSettings):
     embeddings_dir: str = "data/embeddings"
     thumbnails_dir: str = "data/thumbnails"
 
+    data_dir: str | None = None
 
-def load_config():
+    base_path: str = ""
+
+    mcp: bool = False
+    public_url: str = ""
+
+
+def normalize_base_path(value: str | None) -> str:
+    """Turn "maps", "/maps/" or "" into "/maps" or "", the form routing expects"""
+    path = "/" + (value or "").strip().strip("/")
+    return "" if path == "/" else path
+
+
+def load_config(config_path: Path | None = None):
     """Load configuration from JSON file"""
-    config_path = Path(__file__).parent.parent.parent.parent / "config.json"
+    if config_path is None:
+        config_path = Path(__file__).parent.parent.parent.parent / "config.json"
 
     if config_path.exists():
         with open(config_path, "r") as f:
@@ -67,11 +103,20 @@ def load_config():
         # Embedding model settings
         model_config = config_data.get("model_config", {})
 
-        # Support new model_type and model_name fields
-        settings_dict["model_type"] = model_config.get("model_type", "clip")
-        settings_dict["model_name"] = model_config.get(
-            "model_name", model_config.get("clip_model", "openai/clip-vit-base-patch32")
+        legacy_clip_model = model_config.get("clip_model")
+        default_type = (
+            "clip"
+            if legacy_clip_model
+            else model_type_of(model_config.get("model_name"))
         )
+        model_type = model_config.get("model_type", default_type)
+        settings_dict["model_type"] = model_type
+        settings_dict["model_name"] = (
+            model_config.get("model_name")
+            or legacy_clip_model
+            or DEFAULT_MODEL_NAMES.get(model_type, DEFAULT_MODEL_NAMES["siglip"])
+        )
+        settings_dict["model_revision"] = model_config.get("model_revision")
         settings_dict["device"] = model_config.get("device", "cuda")
         settings_dict["batch_size"] = model_config.get("batch_size", 32)
 
@@ -98,4 +143,23 @@ def load_config():
     return Settings()
 
 
+def apply_data_dir(target: Settings, data_dir: str) -> None:
+    """Keep one collection's embeddings, thumbnails and processed images together"""
+    root = Path(data_dir)
+    target.data_dir = str(root)
+    target.embeddings_dir = str(root / "embeddings")
+    target.thumbnails_dir = str(root / "thumbnails")
+    target.processed_data_dir = str(root / "processed")
+
+
 settings = load_config()
+
+if os.environ.get("DCE_DATA_DIR"):
+    apply_data_dir(settings, os.environ["DCE_DATA_DIR"])
+
+if os.environ.get("DCE_PORT"):
+    settings.port = int(os.environ["DCE_PORT"])
+
+settings.base_path = normalize_base_path(os.environ.get("DCE_BASE_PATH"))
+settings.mcp = os.environ.get("DCE_MCP", "").lower() in ("1", "true", "yes")
+settings.public_url = os.environ.get("DCE_PUBLIC_URL", "").rstrip("/")

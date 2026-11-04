@@ -1,4 +1,5 @@
-const API_URL = import.meta.env.API_BASE_URL;
+const sitePath = () => window.location.pathname.replace(/\/index\.html$/, '').replace(/\/$/, '');
+const API_URL = import.meta.env.API_BASE_URL || sitePath();
 
 export const getIiifInfo = async (iiifId) => {
   const url = `https://tile.loc.gov/image-services/iiif/${iiifId}/info.json`;

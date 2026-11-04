@@ -20,8 +20,12 @@ class SiglipService(BaseEmbeddingService):
         """Load SigLIP model and processor"""
         logger.info(f"Loading SigLIP model: {self.model_name}")
         try:
-            self.model = SiglipModel.from_pretrained(self.model_name).to(self.device)
-            self.processor = AutoProcessor.from_pretrained(self.model_name)
+            self.model = SiglipModel.from_pretrained(
+                self.model_name, revision=self.revision
+            ).to(self.device)
+            self.processor = AutoProcessor.from_pretrained(
+                self.model_name, revision=self.revision
+            )
             self.model.eval()
             logger.info(f"SigLIP model loaded successfully on {self.device}")
         except Exception as e:

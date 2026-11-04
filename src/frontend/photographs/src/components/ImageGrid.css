@@ -1,0 +1,118 @@
+.image-grid {
+  --row-height: 190px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.image-grid-small {
+  --row-height: 120px;
+}
+
+.image-grid::after {
+  content: '';
+  flex-grow: 1000000;
+}
+
+.image-grid-cell {
+  position: relative;
+  height: var(--row-height);
+  flex-grow: calc(var(--ratio) * 100);
+  flex-basis: calc(var(--ratio) * var(--row-height));
+  overflow: hidden;
+  border-radius: 3px;
+  background-color: #1e1e1e;
+}
+
+.image-grid-cell a {
+  display: block;
+  width: 100%;
+  height: 100%;
+  color: inherit;
+}
+
+.image-grid-cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.image-grid-cell a:hover img,
+.image-grid-cell a:focus-visible img {
+  transform: scale(1.04);
+  opacity: 0.85;
+}
+
+.image-grid-cell a:focus-visible {
+  outline: 2px solid #d0b49f;
+  outline-offset: -2px;
+}
+
+.image-grid-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 1.5rem 0.6rem 0.5rem;
+  font-size: 0.8rem;
+  line-height: 1.25;
+  text-align: left;
+  color: #f8f5f0;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.85));
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.image-grid-group {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.72rem;
+  color: #d0b49f;
+}
+
+.image-grid-why {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.7rem;
+  color: #b0b0b0;
+}
+
+.image-grid-cell a:hover .image-grid-caption,
+.image-grid-cell a:focus-visible .image-grid-caption {
+  opacity: 1;
+}
+
+.image-grid-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  color: #f8f5f0;
+  background-color: rgba(0, 0, 0, 0.72);
+  border-radius: 4px;
+}
+
+.image-grid-badge svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@media (max-width: 600px) {
+  .image-grid {
+    --row-height: 130px;
+  }
+}
