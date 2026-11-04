@@ -19,6 +19,17 @@ class DeviceType(str, Enum):
 
 
 DEFAULT_MODEL_TYPE = "siglip"
+
+
+def model_type_of(model_name: str | None) -> str:
+    """The model type a model's name points to, or the default type"""
+    name = (model_name or "").lower()
+    for model_type in ("siglip2", "siglip", "clip"):
+        if model_type in name:
+            return model_type
+    return DEFAULT_MODEL_TYPE
+
+
 DEFAULT_MODEL_NAMES = {
     "clip": "openai/clip-vit-base-patch32",
     "siglip": "google/siglip-base-patch16-224",
@@ -93,7 +104,11 @@ def load_config(config_path: Path | None = None):
         model_config = config_data.get("model_config", {})
 
         legacy_clip_model = model_config.get("clip_model")
-        default_type = "clip" if legacy_clip_model else DEFAULT_MODEL_TYPE
+        default_type = (
+            "clip"
+            if legacy_clip_model
+            else model_type_of(model_config.get("model_name"))
+        )
         model_type = model_config.get("model_type", default_type)
         settings_dict["model_type"] = model_type
         settings_dict["model_name"] = (
