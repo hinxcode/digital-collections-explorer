@@ -479,7 +479,7 @@ If you use Digital Collections Explorer in research, please cite the paper and t
 
 ## License
 
-The source code of Digital Collections Explorer is licensed under the [BSD 3-Clause License](LICENSE). Documentation and original figures, such as `overview.png`, are licensed under [CC BY 4.0](LICENSE-docs) unless otherwise noted. Third-party code, models, data and media keep their respective licenses.
+The source code of Digital Collections Explorer is licensed under the [MIT License](LICENSE). Documentation and original figures, such as `overview.png`, are licensed under [CC BY 4.0](LICENSE-docs) unless otherwise noted. Third-party code, models, data and media keep their respective licenses.
 
 ## Contributing
 
