@@ -8,6 +8,14 @@ The [project site](https://digital-collections-explorer.com/) has a live demo an
 
 ![A diagram showing an overview of our Digital Collections Explorer, including its various components.](overview.png)
 
+## What It Does
+
+- **Searches by meaning.** Natural-language queries and reverse image search over photographs, maps and PDFs, with an interface for each: `photographs`, `maps` and `documents`.
+- **Needs no metadata, and uses it when it exists.** A catalog groups images into objects, links each one to its record, and makes the records searchable beside the pictures.
+- **Scales on ordinary hardware.** Indexing reads from disk, S3 or a manifest without copying the originals, and serving needs no GPU.
+- **Is safe to put online.** Rate, upload and concurrency limits protect a small machine, and every refusal is explained in plain words.
+- **Can be searched by AI assistants.** An optional MCP server lets Claude, ChatGPT and other assistants search the collection and link back to it.
+
 ## Quick Start
 
 You need Python 3.10 or later and Node.js 20.19 or later.
@@ -44,14 +52,6 @@ On a Linux server, `deploy/bootstrap.sh` installs everything, indexes and keeps 
 sudo deploy/bootstrap.sh install --name my-collection --source /path/to/images
 deploy/aws/deploy.sh my-collection --source s3://bucket/prefix --anonymous --https
 ```
-
-## What It Does
-
-- **Searches by meaning.** Natural-language queries and reverse image search over photographs, maps and PDFs, with an interface for each: `photographs`, `maps` and `documents`.
-- **Needs no metadata, and uses it when it exists.** A catalog groups images into objects, links each one to its record, and makes the records searchable beside the pictures.
-- **Scales on ordinary hardware.** Indexing reads from disk, S3 or a manifest without copying the originals, and serving needs no GPU.
-- **Is safe to put online.** Rate, upload and concurrency limits protect a small machine, and every refusal is explained in plain words.
-- **Can be searched by AI assistants.** An optional MCP server lets Claude, ChatGPT and other assistants search the collection and link back to it.
 
 ## Documentation
 
