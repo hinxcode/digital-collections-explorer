@@ -39,7 +39,7 @@ The software is built by the [Lab for Computing Cultural Heritage](https://l4cch
 ### Prerequisites
 
 - Python 3.10+
-- Node.js 14+
+- Node.js 20.19+
 - Git
 - Docker (optional, for containerized deployment)
 
