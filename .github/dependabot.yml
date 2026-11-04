@@ -3,8 +3,12 @@ updates:
   # Python dependencies
   - package-ecosystem: "pip"
     directory: "/"
+    versioning-strategy: "increase-if-necessary"
     schedule:
       interval: "monthly"
+    groups:
+      python:
+        patterns: ["*"]
     open-pull-requests-limit: 10
     labels:
       - "dependencies"
@@ -15,6 +19,11 @@ updates:
     directory: "/src/frontend/photographs"
     schedule:
       interval: "monthly"
+    groups:
+      build:
+        patterns: ["vite", "@vitejs/*"]
+      lint:
+        patterns: ["eslint", "@eslint/*", "eslint-plugin-*", "globals"]
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -26,6 +35,20 @@ updates:
     directory: "/src/frontend/maps"
     schedule:
       interval: "monthly"
+    groups:
+      build:
+        patterns: ["vite", "@vitejs/*"]
+      lint:
+        patterns: ["eslint", "@eslint/*", "eslint-plugin-*", "globals"]
+    ignore:
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -37,6 +60,11 @@ updates:
     directory: "/src/frontend/documents"
     schedule:
       interval: "monthly"
+    groups:
+      build:
+        patterns: ["vite", "@vitejs/*"]
+      lint:
+        patterns: ["eslint", "@eslint/*", "eslint-plugin-*", "globals"]
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -48,6 +76,9 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
+    groups:
+      actions:
+        patterns: ["*"]
     labels:
       - "dependencies"
       - "github-actions"
