@@ -189,3 +189,16 @@ def test_large_images_are_counted_at_the_size_they_are_stored():
     assert profiler.stored_pixels(19_200, 9_600) == pytest.approx(
         1920 * 960 + 400 * 200
     )
+
+
+def test_siglip2_vectors_are_sized_like_siglip_and_wider_than_clip():
+    from src.profiling.models import ScanStats
+    from src.profiling.profiler import estimate_sizing
+
+    stats = ScanStats(image_files=1_000)
+    width = {
+        m: estimate_sizing(stats, 0, m).vectors_bytes
+        for m in ("clip", "siglip", "siglip2")
+    }
+    assert width["siglip2"] == width["siglip"] == 1_000 * 768 * 4
+    assert width["clip"] == 1_000 * 512 * 4

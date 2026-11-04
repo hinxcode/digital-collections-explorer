@@ -167,37 +167,7 @@ The frontend will be available at http://localhost:5173 and will proxy API reque
 
 ## Commit Guidelines
 
-We encourage (but don't require) [Conventional Commits](https://www.conventionalcommits.org/) format:
-
-```
-<type>(<scope>): <subject>
-
-<body>
-
-<footer>
-```
-
-**Types:**
-- `feat`: New feature
-- `fix`: Bug fix
-- `docs`: Documentation changes
-- `style`: Code style changes (formatting, no logic change)
-- `refactor`: Code refactoring
-- `perf`: Performance improvements
-- `test`: Adding or updating tests
-- `chore`: Maintenance tasks
-- `research`: Research-related contributions (papers, evaluations, benchmarks)
-
-**Examples:**
-```
-feat(search): add image similarity threshold parameter
-
-fix(embeddings): handle grayscale images correctly
-
-docs(readme): clarify Docker deployment steps
-
-research(clip): add fine-tuning results for historical maps
-```
+Write the subject line as a short sentence that says what the change does for the people who use or run the site, the way the history reads, for example "Cache images and assets under the base path too" or "Take the model type from the model's name when config.json gives only the name". Keep each commit to one change, so it can be reviewed and reverted on its own.
 
 ## Pull Request Process
 
