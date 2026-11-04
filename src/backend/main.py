@@ -155,7 +155,7 @@ def collection_description():
     """What collection.json says about the collection, or the defaults if that fails"""
     try:
         return collection_service.info()
-    except Exception as e:  # the pages below must never fail because the index did
+    except Exception as e:
         logger.warning(f"Describing the collection with defaults: {e}")
         return dict(DEFAULT_COLLECTION)
 
